@@ -10,6 +10,7 @@ import Reviews from './pages/Reviews/Reviews';
 import Search from './pages/Search/Search';
 import Admin from './pages/Admin/Admin';
 import UserProfile from './pages/UserProfile/UserProfile';
+import Login from './pages/Login/Login';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <LoadingProvider>
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
             <Route path="/timeline" element={<Timeline />} />
             <Route path="/por-anno" element={<ByYear />} />
             <Route path="/colecciones" element={<Collections />} />

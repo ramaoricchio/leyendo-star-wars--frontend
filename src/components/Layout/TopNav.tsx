@@ -189,7 +189,7 @@ const TopNav: React.FC<TopNavProps> = ({ active }) => {
           </div>
         ) : (
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/login')}
             style={{
               background: 'linear-gradient(135deg, #C9A84C, #8E7635)',
               border: 'none',
