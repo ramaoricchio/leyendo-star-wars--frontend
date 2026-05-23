@@ -5,6 +5,7 @@ import BookCover from '../../components/BookCover/BookCover';
 import Stars from '../../components/Stars/Stars';
 import { ToneKey } from '../../types/publication';
 import { getCollections, createCollection, updateCollection } from '../../api/collections';
+import { getPublications, createPublication, updatePublication } from '../../api/publications';
 
 type AdminTab = 'Publicaciones' | 'Colecciones' | 'Reseñas' | 'Usuarios';
 
@@ -16,6 +17,11 @@ interface PubItem {
   kind: 'canon' | 'legends';
   pubType: string;
   year: number;
+  isbn: string;
+  publisher: string;
+  era: string;
+  description: string;
+  collectionId?: number;
 }
 
 interface ColItem {
@@ -29,19 +35,16 @@ interface ColItem {
   description: string;
 }
 
-const MOCK_PUBS: PubItem[] = [
-  { id: 1, title: 'Thrawn', author: 'Timothy Zahn', tone: 'C', kind: 'canon', pubType: 'Novela', year: 2017 },
-  { id: 2, title: 'Luz de los Jedi', author: 'Charles Soule', tone: 'E', kind: 'canon', pubType: 'Novela', year: 2021 },
-  { id: 3, title: 'Darth Plagueis', author: 'James Luceno', tone: 'D', kind: 'legends', pubType: 'Novela', year: 2012 },
-  { id: 4, title: 'Kenobi', author: 'John Jackson Miller', tone: 'B', kind: 'legends', pubType: 'Novela', year: 2013 },
-  { id: 5, title: 'Aftermath', author: 'Chuck Wendig', tone: 'G', kind: 'canon', pubType: 'Novela', year: 2015 },
-  { id: 6, title: 'Heredero del Imperio', author: 'Timothy Zahn', tone: 'C', kind: 'legends', pubType: 'Novela', year: 1991 },
-];
 
+const PUB_TYPE_DISPLAY: Record<string, string> = {
+  novela: 'Novela',
+  comic: 'Cómic',
+  antologia: 'Antología',
+  audiolibro: 'Audiolibro',
+};
 
 const ERAS = ['Alta República', 'Antigua República', 'Amanecer Jedi', 'Caída de los Jedi', 'Reinado del Imperio', 'Era de la Rebelión', 'Nueva República', 'Ascenso de la Primera Orden'];
 const TONES: ToneKey[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-const COLLECTIONS = ['Trilogía de Thrawn', 'La Alta República', 'Aftermath', 'Thrawn (Canon)', 'X-Wing'];
 
 const Admin: React.FC = () => {
   const { isAdmin, user } = useAuth();
@@ -50,23 +53,27 @@ const Admin: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminTab>('Publicaciones');
 
   // — Publicaciones state —
+  const [pubs, setPubs] = useState<PubItem[]>([]);
+  const [pubIsNew, setPubIsNew] = useState(false);
+  const [pubSaved, setPubSaved] = useState(false);
+  const [pubError, setPubError] = useState('');
   const [search, setSearch] = useState('');
-  const [selectedId, setSelectedId] = useState<number | null>(1);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [reviewScore, setReviewScore] = useState(4);
   const [isCanon, setIsCanon] = useState(true);
   const [formData, setFormData] = useState({
-    title: 'Thrawn',
-    author: 'Timothy Zahn',
-    year: '2017',
+    title: '',
+    author: '',
+    year: '',
     pubType: 'Novela',
-    era: 'Reinado del Imperio',
-    isbn: '978-0-345-51152-9',
-    publisher: 'Del Rey Books',
-    collection: 'Thrawn (Canon)',
-    pages: '448',
-    description: 'El Imperio Galáctico ha tomado control de la galaxia...',
-    buyLinks: 'https://amazon.com/thrawn',
-    reviewText: 'Una novela magistral que revela el origen del personaje más querido del universo expandido.',
+    era: 'Alta República',
+    isbn: '',
+    publisher: '',
+    collection: '',
+    pages: '',
+    description: '',
+    buyLinks: '',
+    reviewText: '',
   });
 
   // — Colecciones state —
@@ -113,15 +120,123 @@ const Admin: React.FC = () => {
     });
   }, []);
 
+  useEffect(() => {
+    getPublications({ per_page: 100 }).then((r) => {
+      const mapped: PubItem[] = r.items.map((p) => ({
+        id: p.id,
+        title: p.title,
+        author: p.author,
+        tone: TONES[p.id % TONES.length],
+        kind: p.is_canon ? 'canon' : 'legends',
+        pubType: p.pub_type,
+        year: p.year ?? 0,
+        isbn: p.isbn ?? '',
+        publisher: p.publisher ?? '',
+        era: p.era ?? '',
+        description: p.description ?? '',
+        collectionId: p.collection_id,
+      }));
+      setPubs(mapped);
+    });
+  }, []);
+
   if (!isAdmin) return null;
 
-  const filtered = MOCK_PUBS.filter(
+  const filtered = pubs.filter(
     (p) =>
       p.title.toLowerCase().includes(search.toLowerCase()) ||
       p.author.toLowerCase().includes(search.toLowerCase())
   );
 
-  const selectedPub = MOCK_PUBS.find((p) => p.id === selectedId);
+  const selectedPub = pubs.find((p) => p.id === selectedId);
+
+  const handleSelectPub = (pub: PubItem) => {
+    setPubIsNew(false);
+    setPubSaved(false);
+    setPubError('');
+    setSelectedId(pub.id);
+    setIsCanon(pub.kind === 'canon');
+    setReviewScore(4);
+    const colName = cols.find((c) => c.id === pub.collectionId)?.name ?? '';
+    setFormData({
+      title: pub.title,
+      author: pub.author,
+      year: pub.year.toString(),
+      pubType: PUB_TYPE_DISPLAY[pub.pubType] ?? 'Novela',
+      era: pub.era || 'Alta República',
+      isbn: pub.isbn,
+      publisher: pub.publisher,
+      collection: colName,
+      pages: '',
+      description: pub.description,
+      buyLinks: '',
+      reviewText: '',
+    });
+  };
+
+  const handleNewPub = () => {
+    setPubIsNew(true);
+    setPubSaved(false);
+    setPubError('');
+    setSelectedId(null);
+    setIsCanon(true);
+    setReviewScore(4);
+    setFormData({ title: '', author: '', year: '', pubType: 'Novela', era: 'Alta República', isbn: '', publisher: '', collection: '', pages: '', description: '', buyLinks: '', reviewText: '' });
+  };
+
+  const handleSavePub = async () => {
+    setPubError('');
+    const pubTypeMap: Record<string, string> = {
+      'Novela': 'novela', 'Cómic': 'comic', 'Antología': 'antologia', 'Audiolibro': 'audiolibro',
+    };
+    const collectionId = cols.find((c) => c.name === formData.collection)?.id;
+    const payload = {
+      title: formData.title,
+      author: formData.author,
+      pub_type: (pubTypeMap[formData.pubType] ?? 'novela') as 'novela' | 'comic' | 'antologia' | 'audiolibro',
+      isbn: formData.isbn || undefined,
+      publisher: formData.publisher || undefined,
+      year: formData.year ? parseInt(formData.year) : undefined,
+      description: formData.description || undefined,
+      era: formData.era,
+      is_canon: isCanon,
+      collection_id: collectionId,
+    };
+    try {
+      if (pubIsNew) {
+        const created = await createPublication(payload);
+        const newItem: PubItem = {
+          id: created.id,
+          title: created.title,
+          author: created.author,
+          tone: TONES[created.id % TONES.length],
+          kind: created.is_canon ? 'canon' : 'legends',
+          pubType: created.pub_type,
+          year: created.year ?? 0,
+          isbn: created.isbn ?? '',
+          publisher: created.publisher ?? '',
+          era: created.era ?? '',
+          description: created.description ?? '',
+          collectionId: created.collection_id,
+        };
+        setPubs((prev) => [...prev, newItem]);
+        setPubIsNew(false);
+        setSelectedId(created.id);
+      } else {
+        const updated = await updatePublication(selectedId!, payload);
+        setPubs((prev) =>
+          prev.map((p) =>
+            p.id === selectedId
+              ? { ...p, title: updated.title, author: updated.author, pubType: updated.pub_type, year: updated.year ?? 0, kind: updated.is_canon ? 'canon' : 'legends', isbn: updated.isbn ?? '', publisher: updated.publisher ?? '', era: updated.era ?? '', description: updated.description ?? '', collectionId: updated.collection_id }
+              : p
+          )
+        );
+      }
+      setPubSaved(true);
+    } catch {
+      setPubError('No se pudo guardar. Verificá que el backend esté corriendo y que hayas iniciado sesión como admin.');
+    }
+  };
 
   const handleInput = (field: keyof typeof formData) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -584,12 +699,13 @@ const Admin: React.FC = () => {
             />
           </div>
           <button
+            onClick={handleNewPub}
             style={{
               margin: 12,
-              background: 'linear-gradient(135deg, #C9A84C, #8E7635)',
-              border: 'none',
+              background: pubIsNew ? 'rgba(201,168,76,0.15)' : 'linear-gradient(135deg, #C9A84C, #8E7635)',
+              border: pubIsNew ? '1px solid rgba(201,168,76,0.4)' : 'none',
               borderRadius: 6,
-              color: '#0A0A0F',
+              color: pubIsNew ? '#C9A84C' : '#0A0A0F',
               fontFamily: "'Oswald', sans-serif",
               fontWeight: 600,
               fontSize: 13,
@@ -606,7 +722,7 @@ const Admin: React.FC = () => {
             {filtered.map((pub) => (
               <div
                 key={pub.id}
-                onClick={() => setSelectedId(pub.id)}
+                onClick={() => handleSelectPub(pub)}
                 style={{
                   display: 'flex',
                   gap: 12,
@@ -649,30 +765,37 @@ const Admin: React.FC = () => {
         </div>
 
         {/* Editor */}
-        {selectedPub && (
+        {(selectedPub || pubIsNew) && (
           <div style={{ padding: '32px 40px', overflowY: 'auto' }}>
             <div
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                alignItems: 'center',
+                alignItems: 'flex-start',
                 marginBottom: 32,
               }}
             >
-              <h2
-                style={{
-                  fontFamily: "'Oswald', sans-serif",
-                  fontWeight: 600,
-                  fontSize: 24,
-                  textTransform: 'uppercase',
-                  color: '#F2EEDF',
-                  letterSpacing: '0.04em',
-                }}
-              >
-                Editando: {selectedPub.title}
-              </h2>
+              <div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#C9A84C', letterSpacing: '0.3em', marginBottom: 8 }}>
+                  {pubIsNew ? '// NUEVA PUBLICACIÓN' : `// EDITANDO · ID ${selectedId?.toString().padStart(5, '0') ?? '—'}`}
+                </div>
+                <h2
+                  style={{
+                    fontFamily: "'Oswald', sans-serif",
+                    fontWeight: 600,
+                    fontSize: 28,
+                    textTransform: 'uppercase',
+                    color: '#F2EEDF',
+                    letterSpacing: '0.04em',
+                    margin: 0,
+                  }}
+                >
+                  {pubIsNew ? 'Nueva publicación' : (formData.title || 'Sin título')}
+                </h2>
+              </div>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
+                  onClick={() => { setPubIsNew(false); setPubSaved(false); setPubError(''); if (pubs[0]) handleSelectPub(pubs[0]); }}
                   style={{
                     background: 'none',
                     border: '1px solid rgba(255,255,255,0.15)',
@@ -687,20 +810,7 @@ const Admin: React.FC = () => {
                   Cancelar
                 </button>
                 <button
-                  style={{
-                    background: 'none',
-                    border: '1px solid rgba(201,168,76,0.3)',
-                    borderRadius: 6,
-                    color: '#C9A84C',
-                    fontFamily: "'DM Sans', sans-serif",
-                    fontSize: 14,
-                    padding: '8px 20px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Previsualizar
-                </button>
-                <button
+                  onClick={handleSavePub}
                   style={{
                     background: 'linear-gradient(135deg, #C9A84C, #8E7635)',
                     border: 'none',
@@ -715,10 +825,22 @@ const Admin: React.FC = () => {
                     textTransform: 'uppercase',
                   }}
                 >
-                  Guardar cambios
+                  {pubIsNew ? 'Crear publicación' : 'Guardar cambios'}
                 </button>
               </div>
             </div>
+
+            {/* Feedback */}
+            {pubSaved && (
+              <div style={{ marginBottom: 24, padding: '12px 16px', background: 'rgba(107,197,138,0.08)', border: '1px solid rgba(107,197,138,0.3)', color: '#6BC58A', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: '0.08em' }}>
+                ✓ {pubIsNew ? 'Publicación creada correctamente.' : 'Cambios guardados.'}
+              </div>
+            )}
+            {pubError && (
+              <div style={{ marginBottom: 24, padding: '12px 16px', background: 'rgba(194,85,85,0.08)', border: '1px solid rgba(194,85,85,0.3)', color: '#C25555', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: '0.08em' }}>
+                ✗ {pubError}
+              </div>
+            )}
 
             {/* 2-column form */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
@@ -799,8 +921,8 @@ const Admin: React.FC = () => {
                 <label style={labelStyle}>Colección</label>
                 <select style={inputStyle} value={formData.collection} onChange={handleInput('collection')}>
                   <option value="" style={{ background: '#1C1C26' }}>Sin colección</option>
-                  {COLLECTIONS.map((c) => (
-                    <option key={c} value={c} style={{ background: '#1C1C26' }}>{c}</option>
+                  {cols.map((c) => (
+                    <option key={c.id} value={c.name} style={{ background: '#1C1C26' }}>{c.name}</option>
                   ))}
                 </select>
               </div>
