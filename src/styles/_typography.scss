@@ -1,0 +1,69 @@
+@use 'tokens' as *;
+
+// Display headings
+.display-xl {
+  font-family: $font-display;
+  font-weight: 600;
+  font-size: 86px;
+  line-height: 0.95;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+
+.display-lg {
+  font-family: $font-display;
+  font-weight: 600;
+  font-size: 56px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+
+.display-md {
+  font-family: $font-display;
+  font-weight: 500;
+  font-size: 36px;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.display-sm {
+  font-family: $font-display;
+  font-weight: 500;
+  font-size: 24px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+// Body
+.body-lg {
+  font-family: $font-body;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.body-md {
+  font-family: $font-body;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.body-sm {
+  font-family: $font-body;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+// Mono
+.mono {
+  font-family: $font-mono;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.mono-sm {
+  font-family: $font-mono;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
