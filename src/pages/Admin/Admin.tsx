@@ -6,6 +6,7 @@ import Stars from '../../components/Stars/Stars';
 import { ToneKey } from '../../types/publication';
 import { getCollections, createCollection, updateCollection } from '../../api/collections';
 import { getPublications, createPublication, updatePublication } from '../../api/publications';
+import { getReviews, createReview, updateReview } from '../../api/reviews';
 
 type AdminTab = 'Publicaciones' | 'Colecciones' | 'Reseñas' | 'Usuarios';
 
@@ -35,6 +36,16 @@ interface ColItem {
   description: string;
 }
 
+interface RevItem {
+  id: number;
+  publicationId: number;
+  score: number;
+  text: string;
+  excerpt: string;
+  date: string;
+  youtubeUrl: string;
+  isActive: boolean;
+}
 
 const PUB_TYPE_DISPLAY: Record<string, string> = {
   novela: 'Novela',
@@ -92,6 +103,23 @@ const Admin: React.FC = () => {
     tone: 'A' as ToneKey,
   });
 
+  // — Reseñas state —
+  const [revs, setRevs] = useState<RevItem[]>([]);
+  const [revIsNew, setRevIsNew] = useState(false);
+  const [revSaved, setRevSaved] = useState(false);
+  const [revError, setRevError] = useState('');
+  const [revSearch, setRevSearch] = useState('');
+  const [selectedRevId, setSelectedRevId] = useState<number | null>(null);
+  const [revForm, setRevForm] = useState({
+    publicationId: 0,
+    score: 4,
+    text: '',
+    excerpt: '',
+    date: new Date().toISOString().split('T')[0],
+    youtubeUrl: '',
+    isActive: true,
+  });
+
   useEffect(() => {
     if (!isAdmin) {
       navigate('/');
@@ -137,6 +165,21 @@ const Admin: React.FC = () => {
         collectionId: p.collection_id,
       }));
       setPubs(mapped);
+    });
+  }, []);
+
+  useEffect(() => {
+    getReviews({ per_page: 100 }).then((r) => {
+      setRevs(r.items.map((rv) => ({
+        id: rv.id,
+        publicationId: rv.publication_id,
+        score: rv.score,
+        text: rv.text,
+        excerpt: rv.excerpt ?? '',
+        date: rv.date,
+        youtubeUrl: rv.youtube_url ?? '',
+        isActive: rv.is_active ?? true,
+      })));
     });
   }, []);
 
@@ -242,6 +285,79 @@ const Admin: React.FC = () => {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     setFormData((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
+  // — helpers para cruzar publicaciones en el tab Reseñas —
+  const pubTitle = (publicationId: number) =>
+    pubs.find((p) => p.id === publicationId)?.title ?? '(sin publicación)';
+  const pubTone = (publicationId: number): ToneKey =>
+    pubs.find((p) => p.id === publicationId)?.tone ?? 'A';
+  const pubKind = (publicationId: number) =>
+    pubs.find((p) => p.id === publicationId)?.kind ?? 'canon';
+
+  const handleSelectRev = (rv: RevItem) => {
+    setRevIsNew(false);
+    setRevSaved(false);
+    setRevError('');
+    setSelectedRevId(rv.id);
+    setRevForm({ publicationId: rv.publicationId, score: rv.score, text: rv.text, excerpt: rv.excerpt, date: rv.date, youtubeUrl: rv.youtubeUrl, isActive: rv.isActive });
+  };
+
+  const handleNewRev = () => {
+    const reviewedIds = new Set(revs.map((r) => r.publicationId));
+    const firstAvailable = pubs.find((p) => !reviewedIds.has(p.id));
+    setRevIsNew(true);
+    setRevSaved(false);
+    setRevError('');
+    setSelectedRevId(null);
+    setRevForm({ publicationId: firstAvailable?.id ?? 0, score: 4, text: '', excerpt: '', date: new Date().toISOString().split('T')[0], youtubeUrl: '', isActive: true });
+  };
+
+  const handleSaveRev = async () => {
+    setRevError('');
+    if (revIsNew && revs.some((r) => r.publicationId === revForm.publicationId)) {
+      setRevError('Esta publicación ya tiene una reseña.');
+      return;
+    }
+    const payload = {
+      publication_id: revForm.publicationId,
+      score: revForm.score,
+      text: revForm.text,
+      excerpt: revForm.excerpt || undefined,
+      date: revForm.date,
+      youtube_url: revForm.youtubeUrl || undefined,
+      is_active: revForm.isActive,
+    };
+    try {
+      if (revIsNew) {
+        const created = await createReview(payload);
+        const newItem: RevItem = {
+          id: created.id,
+          publicationId: created.publication_id,
+          score: created.score,
+          text: created.text,
+          excerpt: created.excerpt ?? '',
+          date: created.date,
+          youtubeUrl: created.youtube_url ?? '',
+          isActive: created.is_active ?? true,
+        };
+        setRevs((prev) => [...prev, newItem]);
+        setRevIsNew(false);
+        setSelectedRevId(created.id);
+      } else {
+        const updated = await updateReview(selectedRevId!, payload);
+        setRevs((prev) =>
+          prev.map((r) =>
+            r.id === selectedRevId
+              ? { ...r, score: updated.score, text: updated.text, excerpt: updated.excerpt ?? '', date: updated.date, youtubeUrl: updated.youtube_url ?? '', isActive: updated.is_active ?? true }
+              : r
+          )
+        );
+      }
+      setRevSaved(true);
+    } catch {
+      setRevError('No se pudo guardar. Verificá que el backend esté corriendo y que hayas iniciado sesión como admin.');
+    }
   };
 
   const inputStyle: React.CSSProperties = {
@@ -1020,12 +1136,256 @@ const Admin: React.FC = () => {
         )}
         </>}
 
-        {/* ══ TAB: RESEÑAS / USUARIOS — placeholder ══ */}
-        {(activeTab === 'Reseñas' || activeTab === 'Usuarios') && (
+        {/* ══ TAB: RESEÑAS ══ */}
+        {activeTab === 'Reseñas' && (() => {
+          const filteredRevs = revs.filter((rv) =>
+            pubTitle(rv.publicationId).toLowerCase().includes(revSearch.toLowerCase())
+          );
+
+          return (
+            <>
+              {/* Sidebar reseñas */}
+              <div style={{ borderRight: '1px solid rgba(201,168,76,0.1)', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: 16, borderBottom: '1px solid rgba(201,168,76,0.08)' }}>
+                  <input
+                    type="text"
+                    value={revSearch}
+                    onChange={(e) => setRevSearch(e.target.value)}
+                    placeholder="Filtrar por publicación..."
+                    style={{ ...inputStyle, padding: '8px 12px', fontSize: 13 }}
+                  />
+                </div>
+                <button
+                  onClick={handleNewRev}
+                  style={{
+                    margin: 12,
+                    background: revIsNew ? 'rgba(201,168,76,0.15)' : 'linear-gradient(135deg, #C9A84C, #8E7635)',
+                    border: revIsNew ? '1px solid rgba(201,168,76,0.4)' : 'none',
+                    borderRadius: 6,
+                    color: revIsNew ? '#C9A84C' : '#0A0A0F',
+                    fontFamily: "'Oswald', sans-serif",
+                    fontWeight: 600,
+                    fontSize: 13,
+                    padding: 10,
+                    cursor: 'pointer',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  + Nueva reseña
+                </button>
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  {filteredRevs.map((rv) => {
+                    const isActive = !revIsNew && selectedRevId === rv.id;
+                    return (
+                      <div
+                        key={rv.id}
+                        onClick={() => handleSelectRev(rv)}
+                        style={{
+                          display: 'flex',
+                          gap: 12,
+                          padding: '12px 16px',
+                          cursor: 'pointer',
+                          background: isActive ? 'rgba(201,168,76,0.06)' : 'transparent',
+                          borderLeft: `3px solid ${isActive ? '#C9A84C' : 'transparent'}`,
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        <BookCover title={pubTitle(rv.publicationId)} tone={pubTone(rv.publicationId)} kind={pubKind(rv.publicationId)} w={36} ratio={1.5} badge={false} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 500, fontSize: 13, color: rv.isActive ? '#F2EEDF' : '#5C5A52', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                            {pubTitle(rv.publicationId)}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                            <Stars value={rv.score} size={11} />
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#5C5A52' }}>{rv.date}</span>
+                            {!rv.isActive && (
+                              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.1em', color: '#C25555', border: '1px solid #C25555', padding: '1px 4px', borderRadius: 2 }}>
+                                INACTIVA
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Editor reseña */}
+              {(revIsNew || selectedRevId !== null) && (
+                <div style={{ padding: '32px 40px', overflowY: 'auto' }}>
+                  {/* Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
+                    <div>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#C9A84C', letterSpacing: '0.3em', marginBottom: 8 }}>
+                        {revIsNew ? '// NUEVA RESEÑA' : `// EDITANDO · ID ${selectedRevId?.toString().padStart(5, '0') ?? '—'}`}
+                      </div>
+                      <h2 style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 28, textTransform: 'uppercase', color: '#F2EEDF', letterSpacing: '0.04em', margin: 0 }}>
+                        {revIsNew ? 'Nueva reseña' : pubTitle(revForm.publicationId)}
+                      </h2>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <button
+                        onClick={() => { setRevIsNew(false); setRevSaved(false); setRevError(''); if (revs[0]) handleSelectRev(revs[0]); else setSelectedRevId(null); }}
+                        style={{ background: 'none', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, color: '#9C9788', fontFamily: "'DM Sans', sans-serif", fontSize: 14, padding: '8px 20px', cursor: 'pointer' }}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={handleSaveRev}
+                        style={{ background: 'linear-gradient(135deg, #C9A84C, #8E7635)', border: 'none', borderRadius: 6, color: '#0A0A0F', fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 13, padding: '8px 24px', cursor: 'pointer', letterSpacing: '0.06em', textTransform: 'uppercase' }}
+                      >
+                        {revIsNew ? 'Crear reseña' : 'Guardar cambios'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Feedback */}
+                  {revSaved && (
+                    <div style={{ marginBottom: 24, padding: '12px 16px', background: 'rgba(107,197,138,0.08)', border: '1px solid rgba(107,197,138,0.3)', color: '#6BC58A', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: '0.08em' }}>
+                      ✓ {revIsNew ? 'Reseña creada correctamente.' : 'Cambios guardados.'}
+                    </div>
+                  )}
+                  {revError && (
+                    <div style={{ marginBottom: 24, padding: '12px 16px', background: 'rgba(194,85,85,0.08)', border: '1px solid rgba(194,85,85,0.3)', color: '#C25555', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: '0.08em' }}>
+                      ✗ {revError}
+                    </div>
+                  )}
+
+                  {/* Formulario */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+                    {/* Publicación */}
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <label style={labelStyle}>Publicación {!revIsNew && <span style={{ color: '#5C5A52', fontWeight: 400 }}>(no se puede cambiar al editar)</span>}</label>
+                      <select
+                        disabled={!revIsNew}
+                        style={{ ...inputStyle, opacity: revIsNew ? 1 : 0.5, cursor: revIsNew ? 'pointer' : 'not-allowed' }}
+                        value={revForm.publicationId}
+                        onChange={(e) => setRevForm((prev) => ({ ...prev, publicationId: parseInt(e.target.value) }))}
+                      >
+                        {(revIsNew
+                          ? pubs.filter((p) => !revs.some((r) => r.publicationId === p.id))
+                          : pubs
+                        ).map((p) => (
+                          <option key={p.id} value={p.id} style={{ background: '#1C1C26' }}>{p.title}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Puntaje */}
+                    <div>
+                      <label style={labelStyle}>Puntaje</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <Stars value={revForm.score} size={22} />
+                        <span style={{ fontFamily: "'Oswald', sans-serif", fontSize: 24, color: '#C9A84C', fontWeight: 600 }}>
+                          {revForm.score}/5
+                        </span>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <button
+                              key={s}
+                              onClick={() => setRevForm((prev) => ({ ...prev, score: s }))}
+                              style={{
+                                background: revForm.score >= s ? 'rgba(201,168,76,0.15)' : 'rgba(255,255,255,0.04)',
+                                border: `1px solid ${revForm.score >= s ? 'rgba(201,168,76,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                                borderRadius: 4,
+                                color: revForm.score >= s ? '#C9A84C' : '#5C5A52',
+                                fontFamily: "'Oswald', sans-serif",
+                                fontSize: 13,
+                                width: 32,
+                                height: 32,
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Fecha */}
+                    <div>
+                      <label style={labelStyle}>Fecha de la reseña</label>
+                      <input
+                        type="date"
+                        style={inputStyle}
+                        value={revForm.date}
+                        onChange={(e) => setRevForm((prev) => ({ ...prev, date: e.target.value }))}
+                      />
+                    </div>
+
+                    {/* Extracto */}
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <label style={labelStyle}>Extracto (opcional)</label>
+                      <input
+                        style={inputStyle}
+                        value={revForm.excerpt}
+                        onChange={(e) => setRevForm((prev) => ({ ...prev, excerpt: e.target.value }))}
+                        placeholder="Frase corta que resume la reseña..."
+                      />
+                    </div>
+
+                    {/* YouTube URL */}
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <label style={labelStyle}>Video de YouTube (opcional)</label>
+                      <input
+                        style={inputStyle}
+                        value={revForm.youtubeUrl}
+                        onChange={(e) => setRevForm((prev) => ({ ...prev, youtubeUrl: e.target.value }))}
+                        placeholder="https://www.youtube.com/watch?v=..."
+                      />
+                    </div>
+                  </div>
+
+                  {/* Texto */}
+                  <div style={{ marginBottom: 24 }}>
+                    <label style={labelStyle}>Texto de la reseña (Markdown)</label>
+                    <textarea
+                      style={{ ...inputStyle, minHeight: 240, resize: 'vertical', fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}
+                      value={revForm.text}
+                      onChange={(e) => setRevForm((prev) => ({ ...prev, text: e.target.value }))}
+                      placeholder="Escribí la reseña completa acá..."
+                    />
+                  </div>
+
+                  {/* Estado */}
+                  <div>
+                    <label style={labelStyle}>Estado de la reseña</label>
+                    <button
+                      onClick={() => setRevForm((prev) => ({ ...prev, isActive: !prev.isActive }))}
+                      style={{
+                        background: revForm.isActive ? 'rgba(107,197,138,0.08)' : 'rgba(194,85,85,0.08)',
+                        border: `1px solid ${revForm.isActive ? '#6BC58A' : '#C25555'}`,
+                        borderRadius: 6,
+                        color: revForm.isActive ? '#6BC58A' : '#C25555',
+                        fontFamily: "'Oswald', sans-serif",
+                        fontWeight: 600,
+                        fontSize: 13,
+                        padding: '10px 24px',
+                        cursor: 'pointer',
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      {revForm.isActive ? '● Activa' : '○ Inactiva'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
+
+        {/* ══ TAB: USUARIOS — placeholder ══ */}
+        {activeTab === 'Usuarios' && (
           <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: '#5C5A52' }}>
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 32 }}>◈</div>
             <div style={{ fontFamily: "'Oswald', sans-serif", fontSize: 18, letterSpacing: '0.2em', textTransform: 'uppercase' }}>
-              {activeTab} — próximamente
+              Usuarios — próximamente
             </div>
           </div>
         )}
