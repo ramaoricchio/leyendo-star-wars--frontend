@@ -5,6 +5,7 @@ import Home from './pages/Home/Home';
 import Timeline from './pages/Timeline/Timeline';
 import ByYear from './pages/ByYear/ByYear';
 import Collections from './pages/Collections/Collections';
+import CollectionDetail from './pages/CollectionDetail/CollectionDetail';
 import PublicationDetail from './pages/PublicationDetail/PublicationDetail';
 import Reviews from './pages/Reviews/Reviews';
 import Search from './pages/Search/Search';
@@ -23,6 +24,7 @@ function App() {
             <Route path="/timeline" element={<Timeline />} />
             <Route path="/por-anno" element={<ByYear />} />
             <Route path="/colecciones" element={<Collections />} />
+            <Route path="/colecciones/:id" element={<CollectionDetail />} />
             <Route path="/publicaciones/:id" element={<PublicationDetail />} />
             <Route path="/resenas" element={<Reviews />} />
             <Route path="/buscar" element={<Search />} />

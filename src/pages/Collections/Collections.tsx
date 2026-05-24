@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import TopNav from '../../components/Layout/TopNav';
 import Footer from '../../components/Layout/Footer';
 import BookCover from '../../components/BookCover/BookCover';
@@ -151,6 +152,7 @@ const Collections: React.FC = () => {
 };
 
 const CollectionCard: React.FC<{ col: Collection }> = ({ col }) => {
+  const navigate = useNavigate();
   const [hovered, setHovered] = useState(false);
   const kind: 'canon' | 'legends' = col.is_canon ? 'canon' : 'legends';
   const borderColor = kind === 'canon' ? '#4B8FD9' : '#C25555';
@@ -171,6 +173,7 @@ const CollectionCard: React.FC<{ col: Collection }> = ({ col }) => {
         boxShadow: hovered ? `0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px ${borderColor}30` : 'none',
         transition: 'all 0.25s ease',
       }}
+      onClick={() => navigate(`/colecciones/${col.id}`)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
