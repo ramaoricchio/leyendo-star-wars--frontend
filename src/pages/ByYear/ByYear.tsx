@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import TopNav from '../../components/Layout/TopNav';
 import Footer from '../../components/Layout/Footer';
 import BookCover from '../../components/BookCover/BookCover';
@@ -15,6 +16,7 @@ const deriveTone = (id: number): ToneKey => TONE_KEYS[id % 8];
 const DECADES = [1977, 1980, 1990, 2000, 2010, 2020, 2026];
 
 const ByYear: React.FC = () => {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<CanonFilter>('ambos');
 
   const { data, loading, error } = useApi(() => getPublications({ per_page: 200 }));
@@ -229,6 +231,7 @@ const ByYear: React.FC = () => {
                   return (
                     <div
                       key={pub.id}
+                      onClick={() => navigate(`/publicaciones/${pub.id}`)}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',

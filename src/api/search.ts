@@ -1,11 +1,13 @@
 import api from './axios';
 import { Publication } from '../types/publication';
-import { Collection } from '../types/collection';
 
 export interface SearchResults {
-  publications: Publication[];
-  collections: Collection[];
+  items: Publication[];
   total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+  query: string;
 }
 
 export const search = async (params: {

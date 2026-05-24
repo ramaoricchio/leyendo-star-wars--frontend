@@ -429,15 +429,21 @@ const Timeline: React.FC = () => {
               </div>
             ) : (
               filteredBooks.map((pub) => (
-                <BookCover
+                <div
                   key={pub.id}
+                  onClick={() => navigate(`/publicaciones/${pub.id}`)}
+                  style={{ cursor: 'pointer' }}
                   title={pub.title}
-                  author={pub.author}
-                  tone={deriveTone(pub.id)}
-                  kind={pub.is_canon ? 'canon' : 'legends'}
-                  w={130}
-                  ratio={1.5}
-                />
+                >
+                  <BookCover
+                    title={pub.title}
+                    author={pub.author}
+                    tone={deriveTone(pub.id)}
+                    kind={pub.is_canon ? 'canon' : 'legends'}
+                    w={130}
+                    ratio={1.5}
+                  />
+                </div>
               ))
             )}
           </div>
