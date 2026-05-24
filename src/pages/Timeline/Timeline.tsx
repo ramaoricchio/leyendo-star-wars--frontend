@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TopNav from '../../components/Layout/TopNav';
 import Footer from '../../components/Layout/Footer';
 import Starfield from '../../components/Starfield/Starfield';
 import BookCover from '../../components/BookCover/BookCover';
-import { ToneKey } from '../../types/publication';
+import { ToneKey, Publication } from '../../types/publication';
+import { getPublications } from '../../api/publications';
 
 type CanonFilter = 'canon' | 'legends' | 'ambos';
 
@@ -12,10 +13,9 @@ interface Era {
   id: string;
   name: string;
   range: string;
-  count: number;
   color: string;
   description: string;
-  books: { title: string; author: string; tone: ToneKey; kind: 'canon' | 'legends' }[];
+  apiEra: string;
 }
 
 const ERAS: Era[] = [
@@ -23,126 +23,128 @@ const ERAS: Era[] = [
     id: 'dawn',
     name: 'Amanecer Jedi',
     range: 'c. 25.000 – 5.000 BBY',
-    count: 18,
     color: '#7B5BC5',
     description: 'Los albores de la Orden Jedi y los primeros enfrentamientos con el lado oscuro. Una era de descubrimiento y formación de la galaxia.',
-    books: [
-      { title: 'Amanecer del Jedi: Fuerza sin oscuridad', author: 'John Ostrander', tone: 'A', kind: 'legends' },
-      { title: 'Amanecer del Jedi: El despertar', author: 'John Ostrander', tone: 'A', kind: 'legends' },
-      { title: 'Amanecer del Jedi: Prisión del Oscuro', author: 'John Ostrander', tone: 'F', kind: 'legends' },
-      { title: 'Antes de la República', author: 'Varios', tone: 'G', kind: 'legends' },
-    ],
+    apiEra: 'Amanecer Jedi',
   },
   {
     id: 'oldrep',
     name: 'Antigua República',
     range: '5.000 – 1.000 BBY',
-    count: 42,
     color: '#5BA3C5',
     description: 'La época dorada de la Antigua República, marcada por guerras devastadoras contra los Sith y el surgimiento de grandes leyendas.',
-    books: [
-      { title: 'Caballeros de la Antigua República', author: 'John Jackson Miller', tone: 'B', kind: 'legends' },
-      { title: 'La Guerra Sith', author: 'Kevin J. Anderson', tone: 'D', kind: 'legends' },
-      { title: 'Darth Bane: La senda de la destrucción', author: 'Drew Karpyshyn', tone: 'D', kind: 'legends' },
-      { title: 'Darth Bane: La regla de dos', author: 'Drew Karpyshyn', tone: 'G', kind: 'legends' },
-    ],
+    apiEra: 'Antigua República',
   },
   {
     id: 'high',
     name: 'Alta República',
     range: '500 – 100 BBY',
-    count: 36,
     color: '#E3C865',
     description: 'La era más luminosa de los Jedi, cuando la República expandía sus fronteras y los guardianes de la paz brillaban en toda su gloria.',
-    books: [
-      { title: 'Luz de los Jedi', author: 'Charles Soule', tone: 'E', kind: 'canon' },
-      { title: 'El sendero del engaño', author: 'Claudia Gray', tone: 'C', kind: 'canon' },
-      { title: 'La tormenta de la cosecha', author: 'Cavan Scott', tone: 'H', kind: 'canon' },
-      { title: 'El guardián de las tormentas Whills', author: 'Daniel José Older', tone: 'F', kind: 'canon' },
-    ],
+    apiEra: 'Alta República',
   },
   {
     id: 'fall',
     name: 'Caída de los Jedi',
     range: '100 – 19 BBY',
-    count: 54,
     color: '#6BC58A',
     description: 'La preuela a las películas. Intrigas políticas, el ascenso de Palpatine y el comienzo del fin para la Orden Jedi.',
-    books: [
-      { title: 'Darth Plagueis', author: 'James Luceno', tone: 'D', kind: 'legends' },
-      { title: 'Maul: Lockdown', author: 'Joe Schreiber', tone: 'D', kind: 'legends' },
-      { title: 'La amenaza Phantom: Novela', author: 'Terry Brooks', tone: 'A', kind: 'legends' },
-      { title: 'Cloak of Deception', author: 'James Luceno', tone: 'C', kind: 'legends' },
-    ],
+    apiEra: 'Caída de los Jedi',
   },
   {
     id: 'reign',
     name: 'Reinado del Imperio',
     range: '19 BBY – 4 ABY',
-    count: 87,
     color: '#C56B5B',
     description: 'La era oscura del Imperio Galáctico. Los Jedi sobrevivientes, la Rebelión naciente y los héroes que desafiaron la tiranía.',
-    books: [
-      { title: 'Kenobi', author: 'John Jackson Miller', tone: 'E', kind: 'legends' },
-      { title: 'Thrawn', author: 'Timothy Zahn', tone: 'C', kind: 'canon' },
-      { title: 'Rogue One: Novela', author: 'Alexander Freed', tone: 'G', kind: 'canon' },
-      { title: 'Una nueva esperanza: Novela', author: 'Alan Dean Foster', tone: 'B', kind: 'legends' },
-    ],
+    apiEra: 'Reinado del Imperio',
   },
   {
     id: 'civil',
     name: 'Era de la Rebelión',
     range: '4 – 5 ABY',
-    count: 31,
     color: '#C9A84C',
     description: 'La guerra civil galáctica alcanza su clímax. Aldeeran, la Estrella de la Muerte, Hoth, Endor. Los momentos más icónicos de la saga.',
-    books: [
-      { title: 'El Imperio Contraataca: Novela', author: 'Donald Glut', tone: 'E', kind: 'legends' },
-      { title: 'El retorno del Jedi: Novela', author: 'James Kahn', tone: 'H', kind: 'legends' },
-      { title: 'Aftermath', author: 'Chuck Wendig', tone: 'G', kind: 'canon' },
-      { title: 'Aftermath: Life Debt', author: 'Chuck Wendig', tone: 'C', kind: 'canon' },
-    ],
+    apiEra: 'Era de la Rebelión',
   },
   {
     id: 'newrep',
     name: 'Nueva República',
     range: '5 – 34 ABY',
-    count: 64,
     color: '#5B7FC5',
     description: 'La galaxia reconstruye tras la caída del Imperio. Nuevas amenazas emergen mientras la República Galáctica intenta florecer.',
-    books: [
-      { title: 'Heredero del Imperio', author: 'Timothy Zahn', tone: 'C', kind: 'legends' },
-      { title: 'Oscuras fuerzas: Soldado por el Imperio', author: 'William C. Dietz', tone: 'D', kind: 'legends' },
-      { title: 'X-Wing: Rogue Squadron', author: 'Michael A. Stackpole', tone: 'E', kind: 'legends' },
-      { title: 'Mandalorian: El camino', author: 'Jon Favreau', tone: 'G', kind: 'canon' },
-    ],
+    apiEra: 'Nueva República',
   },
   {
     id: 'risefo',
     name: 'Ascenso de la Primera Orden',
     range: '34 – 35 ABY',
-    count: 22,
     color: '#B45BC5',
     description: 'Los últimos Jedi, la resistencia final y el despertar de una nueva generación de héroes frente a la Primera Orden.',
-    books: [
-      { title: 'El despertar de la Fuerza: Novela', author: 'Alan Dean Foster', tone: 'A', kind: 'canon' },
-      { title: 'Los últimos Jedi: Novela', author: 'Jason Fry', tone: 'D', kind: 'canon' },
-      { title: 'El ascenso de Skywalker: Novela', author: 'Rae Carson', tone: 'F', kind: 'canon' },
-      { title: 'Phasma', author: 'Delilah S. Dawson', tone: 'G', kind: 'canon' },
-    ],
+    apiEra: 'Ascenso de la Primera Orden',
   },
 ];
+
+const deriveTone = (id: number): ToneKey =>
+  String.fromCharCode(65 + (id % 8)) as ToneKey;
 
 const Timeline: React.FC = () => {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<CanonFilter>('ambos');
   const [activeEra, setActiveEra] = useState<string>('high');
+  const [books, setBooks] = useState<Publication[]>([]);
+  const [eraTotal, setEraTotal] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+  const [eraCounts, setEraCounts] = useState<Record<string, number>>({});
 
   const currentEra = ERAS.find((e) => e.id === activeEra) || ERAS[0];
 
-  const filteredBooks = currentEra.books.filter((b) => {
+  useEffect(() => {
+    Promise.all(
+      ERAS.map((era) =>
+        getPublications({ era: era.apiEra, per_page: 1 })
+          .then((r) => ({ id: era.id, total: r.total }))
+          .catch(() => ({ id: era.id, total: 0 }))
+      )
+    ).then((results) => {
+      const counts: Record<string, number> = {};
+      results.forEach((r) => { counts[r.id] = r.total; });
+      setEraCounts(counts);
+    });
+  }, []);
+
+  useEffect(() => {
+    const era = ERAS.find((e) => e.id === activeEra);
+    if (!era) return;
+
+    let cancelled = false;
+    setBooks([]);
+    setEraTotal(0);
+    setLoading(true);
+
+    getPublications({ era: era.apiEra, per_page: 50 })
+      .then((result) => {
+        if (cancelled) return;
+        setBooks(result.items);
+        setEraTotal(result.total);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBooks([]);
+          setEraTotal(0);
+        }
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [activeEra]);
+
+  const filteredBooks = books.filter((b) => {
     if (filter === 'ambos') return true;
-    return b.kind === filter;
+    return filter === 'canon' ? b.is_canon : !b.is_canon;
   });
 
   return (
@@ -336,7 +338,7 @@ const Timeline: React.FC = () => {
                       marginTop: 4,
                     }}
                   >
-                    {era.count} títulos
+                    {eraCounts[era.id] ?? '—'} títulos
                   </div>
                 </div>
               </div>
@@ -385,7 +387,7 @@ const Timeline: React.FC = () => {
                 marginBottom: 16,
               }}
             >
-              {currentEra.count} títulos en esta era
+              {eraTotal} títulos en esta era
             </div>
             <p
               style={{
@@ -401,19 +403,20 @@ const Timeline: React.FC = () => {
           </div>
 
           {/* Book covers */}
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 32 }}>
-            {filteredBooks.map((book, i) => (
-              <BookCover
-                key={i}
-                title={book.title}
-                author={book.author}
-                tone={book.tone}
-                kind={book.kind}
-                w={130}
-                ratio={1.5}
-              />
-            ))}
-            {filteredBooks.length === 0 && (
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 32, minHeight: 120 }}>
+            {loading ? (
+              <div
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 12,
+                  color: '#5C5A52',
+                  padding: '40px 0',
+                  letterSpacing: '0.06em',
+                }}
+              >
+                Cargando…
+              </div>
+            ) : filteredBooks.length === 0 ? (
               <div
                 style={{
                   fontFamily: "'DM Sans', sans-serif",
@@ -424,6 +427,18 @@ const Timeline: React.FC = () => {
               >
                 No hay títulos de este tipo en esta era.
               </div>
+            ) : (
+              filteredBooks.map((pub) => (
+                <BookCover
+                  key={pub.id}
+                  title={pub.title}
+                  author={pub.author}
+                  tone={deriveTone(pub.id)}
+                  kind={pub.is_canon ? 'canon' : 'legends'}
+                  w={130}
+                  ratio={1.5}
+                />
+              ))
             )}
           </div>
 
@@ -443,7 +458,7 @@ const Timeline: React.FC = () => {
               textTransform: 'uppercase',
             }}
           >
-            Ver {currentEra.count} títulos →
+            Ver {eraTotal} títulos →
           </button>
         </div>
       </div>

@@ -4,132 +4,28 @@ import Footer from '../../components/Layout/Footer';
 import BookCover from '../../components/BookCover/BookCover';
 import Flag from '../../components/Flag/Flag';
 import { ToneKey } from '../../types/publication';
+import { Collection } from '../../types/collection';
+import useApi from '../../hooks/useApi';
+import { getCollections } from '../../api/collections';
 
 type FilterType = 'todas' | 'canon' | 'legends';
 
-interface CollectionCard {
-  id: number;
-  name: string;
-  author: string;
-  era: string;
-  kind: 'canon' | 'legends';
-  count: number;
-  books: { title: string; tone: ToneKey }[];
-}
-
-const COLLECTIONS: CollectionCard[] = [
-  {
-    id: 1,
-    name: 'Trilogía de Thrawn',
-    author: 'Timothy Zahn',
-    era: 'Nueva República',
-    kind: 'legends',
-    count: 3,
-    books: [
-      { title: 'Heredero del Imperio', tone: 'C' },
-      { title: 'La Flota de Oscuras Fuerzas', tone: 'E' },
-      { title: 'El Último Comando', tone: 'G' },
-    ],
-  },
-  {
-    id: 2,
-    name: 'La Alta República',
-    author: 'Varios autores',
-    era: 'Alta República',
-    kind: 'canon',
-    count: 12,
-    books: [
-      { title: 'Luz de los Jedi', tone: 'E' },
-      { title: 'El sendero del engaño', tone: 'C' },
-      { title: 'La tormenta', tone: 'H' },
-    ],
-  },
-  {
-    id: 3,
-    name: 'Darth Bane',
-    author: 'Drew Karpyshyn',
-    era: 'Antigua República',
-    kind: 'legends',
-    count: 3,
-    books: [
-      { title: 'La senda de la destrucción', tone: 'D' },
-      { title: 'La regla de dos', tone: 'G' },
-      { title: 'Dinastía del mal', tone: 'F' },
-    ],
-  },
-  {
-    id: 4,
-    name: 'X-Wing',
-    author: 'Michael A. Stackpole',
-    era: 'Nueva República',
-    kind: 'legends',
-    count: 10,
-    books: [
-      { title: 'Rogue Squadron', tone: 'E' },
-      { title: 'Wedge\'s Gamble', tone: 'B' },
-      { title: 'The Krytos Trap', tone: 'C' },
-    ],
-  },
-  {
-    id: 5,
-    name: 'Aftermath',
-    author: 'Chuck Wendig',
-    era: 'Era de la Rebelión',
-    kind: 'canon',
-    count: 3,
-    books: [
-      { title: 'Aftermath', tone: 'G' },
-      { title: 'Life Debt', tone: 'C' },
-      { title: 'Empire\'s End', tone: 'D' },
-    ],
-  },
-  {
-    id: 6,
-    name: 'Thrawn (Canon)',
-    author: 'Timothy Zahn',
-    era: 'Reinado del Imperio',
-    kind: 'canon',
-    count: 4,
-    books: [
-      { title: 'Thrawn', tone: 'C' },
-      { title: 'Thrawn: Alianzas', tone: 'E' },
-      { title: 'Thrawn: Traición', tone: 'G' },
-    ],
-  },
-  {
-    id: 7,
-    name: 'Jedi Academy',
-    author: 'Kevin J. Anderson',
-    era: 'Nueva República',
-    kind: 'legends',
-    count: 3,
-    books: [
-      { title: 'Búsqueda de Jedi', tone: 'H' },
-      { title: 'Acecho en la oscuridad', tone: 'A' },
-      { title: 'El Resurgimiento de los Champions', tone: 'F' },
-    ],
-  },
-  {
-    id: 8,
-    name: 'Nueva Trilogía de Jedi',
-    author: 'Kevin J. Anderson',
-    era: 'Nueva República',
-    kind: 'legends',
-    count: 4,
-    books: [
-      { title: 'Ícaro Negro', tone: 'D' },
-      { title: 'Esclavo del Imperio', tone: 'B' },
-      { title: 'La caída de los Jedi', tone: 'G' },
-    ],
-  },
-];
+const TONE_KEYS: ToneKey[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+const TONE_SET = new Set<string>(TONE_KEYS);
+const deriveTone = (id: number, offset = 0): ToneKey => TONE_KEYS[(id * 3 + offset) % 8];
+const safeTone = (raw: string | undefined, id: number, offset: number): ToneKey =>
+  raw && TONE_SET.has(raw) ? (raw as ToneKey) : deriveTone(id, offset);
 
 const Collections: React.FC = () => {
   const [filter, setFilter] = useState<FilterType>('todas');
 
-  const filtered = COLLECTIONS.filter((c) => {
+  const { data, loading, error } = useApi(() => getCollections({ per_page: 100 }));
+  const collections: Collection[] = data?.items ?? [];
+
+  const filtered = collections.filter((c) => {
     if (filter === 'todas') return true;
-    return c.kind === filter;
+    const kind = c.is_canon ? 'canon' : 'legends';
+    return kind === filter;
   });
 
   return (
@@ -192,23 +88,61 @@ const Collections: React.FC = () => {
       </div>
 
       {/* Grid */}
-      <div
-        style={{
-          flex: 1,
-          padding: '48px 56px 64px',
-        }}
-      >
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: 24,
-          }}
-        >
-          {filtered.map((col) => (
-            <CollectionCard key={col.id} col={col} />
-          ))}
-        </div>
+      <div style={{ flex: 1, padding: '48px 56px 64px' }}>
+        {loading && (
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '80px 0',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 13,
+              color: '#5C5A52',
+              letterSpacing: '0.06em',
+            }}
+          >
+            Cargando…
+          </div>
+        )}
+        {error && (
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '80px 0',
+              fontFamily: "'DM Sans', sans-serif",
+              fontSize: 14,
+              color: '#C25555',
+            }}
+          >
+            Error al cargar las colecciones.
+          </div>
+        )}
+        {!loading && !error && (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: 24,
+            }}
+          >
+            {filtered.map((col) => (
+              <CollectionCard key={col.id} col={col} />
+            ))}
+            {filtered.length === 0 && (
+              <div
+                style={{
+                  gridColumn: '1 / -1',
+                  textAlign: 'center',
+                  padding: '80px 0',
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontSize: 16,
+                  color: '#5C5A52',
+                }}
+              >
+                No hay colecciones disponibles.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <Footer />
@@ -216,9 +150,14 @@ const Collections: React.FC = () => {
   );
 };
 
-const CollectionCard: React.FC<{ col: CollectionCard }> = ({ col }) => {
+const CollectionCard: React.FC<{ col: Collection }> = ({ col }) => {
   const [hovered, setHovered] = useState(false);
-  const borderColor = col.kind === 'canon' ? '#4B8FD9' : '#C25555';
+  const kind: 'canon' | 'legends' = col.is_canon ? 'canon' : 'legends';
+  const borderColor = kind === 'canon' ? '#4B8FD9' : '#C25555';
+
+  const coverTiles = [0, 1, 2].map((i) => ({
+    tone: safeTone(col.cover_tone, col.id, i),
+  }));
 
   return (
     <div
@@ -248,7 +187,7 @@ const CollectionCard: React.FC<{ col: CollectionCard }> = ({ col }) => {
         }}
       >
         {/* Stacked covers */}
-        {col.books.slice(0, 3).map((book, i) => (
+        {coverTiles.map((tile, i) => (
           <div
             key={i}
             style={{
@@ -259,9 +198,9 @@ const CollectionCard: React.FC<{ col: CollectionCard }> = ({ col }) => {
             }}
           >
             <BookCover
-              title={book.title}
-              tone={book.tone}
-              kind={col.kind}
+              title={col.name}
+              tone={tile.tone}
+              kind={kind}
               w={90}
               ratio={1.5}
               badge={false}
@@ -284,7 +223,7 @@ const CollectionCard: React.FC<{ col: CollectionCard }> = ({ col }) => {
       {/* Info area */}
       <div style={{ padding: '16px 20px 20px' }}>
         <div style={{ marginBottom: 10 }}>
-          <Flag kind={col.kind} size="sm" />
+          <Flag kind={kind} size="sm" />
         </div>
         <h3
           style={{
@@ -308,7 +247,7 @@ const CollectionCard: React.FC<{ col: CollectionCard }> = ({ col }) => {
             marginBottom: 4,
           }}
         >
-          {col.author}
+          {col.author ?? ''}
         </div>
         <div
           style={{
@@ -318,7 +257,7 @@ const CollectionCard: React.FC<{ col: CollectionCard }> = ({ col }) => {
             letterSpacing: '0.06em',
           }}
         >
-          {col.era} · {col.count} vol.
+          {col.era ?? ''}
         </div>
       </div>
     </div>

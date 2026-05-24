@@ -5,89 +5,25 @@ import BookCover from '../../components/BookCover/BookCover';
 import Flag from '../../components/Flag/Flag';
 import Stars from '../../components/Stars/Stars';
 import { ToneKey } from '../../types/publication';
+import { Review } from '../../types/review';
+import useApi from '../../hooks/useApi';
+import { getReviews } from '../../api/reviews';
 
-interface ReviewItem {
-  id: number;
-  title: string;
-  author: string;
-  tone: ToneKey;
-  kind: 'canon' | 'legends';
-  score: number;
-  date: string;
-  pubType: string;
-  excerpt: string;
-  featured?: boolean;
-}
+const TONE_KEYS: ToneKey[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+const deriveTone = (id: number): ToneKey => TONE_KEYS[id % 8];
 
-const REVIEWS: ReviewItem[] = [
-  {
-    id: 1,
-    title: 'La Alta República: Luz de los Jedi',
-    author: 'Charles Soule',
-    tone: 'E',
-    kind: 'canon',
-    score: 4.5,
-    date: '12 may 2026',
-    pubType: 'Novela',
-    excerpt: 'Un comienzo épico para la era más luminosa de los Jedi. Soule construye un universo vivo y amenazante con una maestría narrativa que pocas novelas de Star Wars logran. La Gran Catástrofe es uno de los eventos más visuales e impactantes de todo el canon.',
-    featured: true,
-  },
-  {
-    id: 2,
-    title: 'Thrawn',
-    author: 'Timothy Zahn',
-    tone: 'C',
-    kind: 'canon',
-    score: 5,
-    date: '3 may 2026',
-    pubType: 'Novela',
-    excerpt: 'El regreso del Gran Almirante es tan brillante como uno esperaba. Zahn reinventa al personaje para el canon y lo hace con una elegancia narrativa impecable. Imprescindible para cualquier fan.',
-  },
-  {
-    id: 3,
-    title: 'Darth Plagueis',
-    author: 'James Luceno',
-    tone: 'D',
-    kind: 'legends',
-    score: 4,
-    date: '28 abr 2026',
-    pubType: 'Novela',
-    excerpt: 'El origen del Sith más poderoso, narrado con una densidad política que pocos libros de Star Wars alcanzan. Luceno construye la conspiración Sith con precisión de relojero.',
-  },
-  {
-    id: 4,
-    title: 'Kenobi',
-    author: 'John Jackson Miller',
-    tone: 'B',
-    kind: 'legends',
-    score: 4.5,
-    date: '15 abr 2026',
-    pubType: 'Novela',
-    excerpt: 'El mejor retrato de Obi-Wan Kenobi jamás escrito. Miller captura la soledad del exilio y la carga de cargar con los secretos de la galaxia. Una novela de western espacial brillante.',
-  },
-  {
-    id: 5,
-    title: 'Aftermath',
-    author: 'Chuck Wendig',
-    tone: 'G',
-    kind: 'canon',
-    score: 3,
-    date: '8 abr 2026',
-    pubType: 'Novela',
-    excerpt: 'Un inicio irregular para la nueva era canónica. Wendig tiene ideas frescas pero la ejecución tropieza en el ritmo y algunos personajes secundarios. Vale la pena por los interludios.',
-  },
-  {
-    id: 6,
-    title: 'Rogue One: Novela',
-    author: 'Alexander Freed',
-    tone: 'F',
-    kind: 'canon',
-    score: 4,
-    date: '1 abr 2026',
-    pubType: 'Novela',
-    excerpt: 'La adaptación supera a la película en profundidad de personaje. Freed da vida interior a Cassian y Jyn con una economía narrativa admirable. Una de las mejores novelizaciones del universo.',
-  },
-];
+const PUB_TYPE_LABEL: Record<string, string> = {
+  novela: 'Novela',
+  comic: 'Cómic',
+  antologia: 'Antología',
+  audiolibro: 'Audiolibro',
+};
+
+const formatDate = (iso: string): string => {
+  const d = new Date(iso);
+  const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+};
 
 const PUB_TYPES = ['Todos', 'Novela', 'Cómic', 'Antología', 'Audiolibro'];
 
@@ -96,9 +32,17 @@ const Reviews: React.FC = () => {
   const [selectedKind, setSelectedKind] = useState<'ambos' | 'canon' | 'legends'>('ambos');
   const [minScore, setMinScore] = useState(0);
 
-  const filtered = REVIEWS.filter((r) => {
-    if (selectedType !== 'Todos' && r.pubType !== selectedType) return false;
-    if (selectedKind !== 'ambos' && r.kind !== selectedKind) return false;
+  const { data, loading, error } = useApi(() => getReviews({ per_page: 100 }));
+  const reviews: Review[] = data?.items ?? [];
+
+  const filtered = reviews.filter((r) => {
+    if (!r.publication) return false;
+    const pubTypeLabel = PUB_TYPE_LABEL[r.publication.pub_type] ?? '';
+    if (selectedType !== 'Todos' && pubTypeLabel !== selectedType) return false;
+    if (selectedKind !== 'ambos') {
+      const kind = r.publication.is_canon ? 'canon' : 'legends';
+      if (kind !== selectedKind) return false;
+    }
     if (r.score < minScore) return false;
     return true;
   });
@@ -268,119 +212,138 @@ const Reviews: React.FC = () => {
 
         {/* Review list */}
         <div style={{ padding: '32px 40px' }}>
-          {filtered.map((review, i) => (
+          {loading && (
             <div
-              key={review.id}
               style={{
-                display: 'grid',
-                gridTemplateColumns: '100px 1fr 180px',
-                gap: 24,
-                alignItems: 'start',
-                padding: '24px',
-                background: review.featured ? 'rgba(201,168,76,0.04)' : 'transparent',
-                border: `1px solid ${review.featured ? 'rgba(201,168,76,0.18)' : 'rgba(255,255,255,0.05)'}`,
-                borderRadius: 8,
-                marginBottom: 16,
-                cursor: 'pointer',
-                transition: 'border-color 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                if (!review.featured) (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(201,168,76,0.15)';
-              }}
-              onMouseLeave={(e) => {
-                if (!review.featured) (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.05)';
+                textAlign: 'center',
+                padding: '80px 0',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 13,
+                color: '#5C5A52',
+                letterSpacing: '0.06em',
               }}
             >
-              {/* Book cover */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <BookCover title={review.title} author={review.author} tone={review.tone} kind={review.kind} w={88} ratio={1.5} />
-              </div>
-              {/* Meta + excerpt */}
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <Flag kind={review.kind} size="sm" />
-                  {review.featured && (
-                    <span
-                      style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 10,
-                        color: '#C9A84C',
-                        background: 'rgba(201,168,76,0.1)',
-                        border: '1px solid rgba(201,168,76,0.2)',
-                        borderRadius: 3,
-                        padding: '2px 6px',
-                        letterSpacing: '0.1em',
-                      }}
-                    >
-                      DESTACADA
-                    </span>
-                  )}
-                </div>
-                <h3
-                  style={{
-                    fontFamily: "'Oswald', sans-serif",
-                    fontWeight: 600,
-                    fontSize: 20,
-                    textTransform: 'uppercase',
-                    color: '#F2EEDF',
-                    letterSpacing: '0.02em',
-                    lineHeight: 1.1,
-                    marginBottom: 6,
-                  }}
-                >
-                  {review.title}
-                </h3>
-                <div
-                  style={{
-                    fontFamily: "'DM Sans', sans-serif",
-                    fontSize: 14,
-                    color: '#5C5A52',
-                    marginBottom: 12,
-                  }}
-                >
-                  {review.author} · {review.pubType}
-                </div>
-                <p
-                  style={{
-                    fontFamily: "'DM Sans', sans-serif",
-                    fontSize: 14,
-                    color: '#9C9788',
-                    lineHeight: 1.65,
-                  }}
-                >
-                  {review.excerpt}
-                </p>
-              </div>
-              {/* Score + date */}
-              <div style={{ textAlign: 'right' }}>
-                <div
-                  style={{
-                    fontFamily: "'Oswald', sans-serif",
-                    fontWeight: 600,
-                    fontSize: 42,
-                    color: '#C9A84C',
-                    lineHeight: 1,
-                    marginBottom: 4,
-                  }}
-                >
-                  {review.score}
-                </div>
-                <Stars value={review.score} size={14} />
-                <div
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 11,
-                    color: '#5C5A52',
-                    marginTop: 12,
-                    letterSpacing: '0.06em',
-                  }}
-                >
-                  {review.date}
-                </div>
-              </div>
+              Cargando…
             </div>
-          ))}
-          {filtered.length === 0 && (
+          )}
+          {error && (
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '80px 0',
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: 14,
+                color: '#C25555',
+              }}
+            >
+              Error al cargar las reseñas.
+            </div>
+          )}
+          {!loading && !error && filtered.map((review) => {
+            const pub = review.publication!;
+            const kind: 'canon' | 'legends' = pub.is_canon ? 'canon' : 'legends';
+            const tone = deriveTone(pub.id);
+            const pubTypeLabel = PUB_TYPE_LABEL[pub.pub_type] ?? pub.pub_type;
+            const dateStr = review.date ? formatDate(review.date) : '';
+
+            return (
+              <div
+                key={review.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '100px 1fr 180px',
+                  gap: 24,
+                  alignItems: 'start',
+                  padding: '24px',
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.05)',
+                  borderRadius: 8,
+                  marginBottom: 16,
+                  cursor: 'pointer',
+                  transition: 'border-color 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(201,168,76,0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.05)';
+                }}
+              >
+                {/* Book cover */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <BookCover title={pub.title} author={pub.author} tone={tone} kind={kind} w={88} ratio={1.5} />
+                </div>
+                {/* Meta + excerpt */}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <Flag kind={kind} size="sm" />
+                  </div>
+                  <h3
+                    style={{
+                      fontFamily: "'Oswald', sans-serif",
+                      fontWeight: 600,
+                      fontSize: 20,
+                      textTransform: 'uppercase',
+                      color: '#F2EEDF',
+                      letterSpacing: '0.02em',
+                      lineHeight: 1.1,
+                      marginBottom: 6,
+                    }}
+                  >
+                    {pub.title}
+                  </h3>
+                  <div
+                    style={{
+                      fontFamily: "'DM Sans', sans-serif",
+                      fontSize: 14,
+                      color: '#5C5A52',
+                      marginBottom: 12,
+                    }}
+                  >
+                    {pub.author} · {pubTypeLabel}
+                  </div>
+                  <p
+                    style={{
+                      fontFamily: "'DM Sans', sans-serif",
+                      fontSize: 14,
+                      color: '#9C9788',
+                      lineHeight: 1.65,
+                    }}
+                  >
+                    {review.excerpt || review.text}
+                  </p>
+                </div>
+                {/* Score + date */}
+                <div style={{ textAlign: 'right' }}>
+                  <div
+                    style={{
+                      fontFamily: "'Oswald', sans-serif",
+                      fontWeight: 600,
+                      fontSize: 42,
+                      color: '#C9A84C',
+                      lineHeight: 1,
+                      marginBottom: 4,
+                    }}
+                  >
+                    {review.score}
+                  </div>
+                  <Stars value={review.score} size={14} />
+                  <div
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 11,
+                      color: '#5C5A52',
+                      marginTop: 12,
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    {dateStr}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {!loading && !error && filtered.length === 0 && (
             <div
               style={{
                 textAlign: 'center',
