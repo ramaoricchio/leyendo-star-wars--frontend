@@ -28,6 +28,12 @@ const formatDate = (iso: string): string => {
 
 const PUB_TYPES = ['Todos', 'Novela', 'Cómic', 'Antología', 'Audiolibro'];
 
+const stripHtml = (html: string): string => {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html.replace(/<\/?(p|h[1-6]|li|blockquote)[^>]*>/gi, ' ');
+  return (tmp.textContent ?? '').replace(/\s+/g, ' ').trim();
+};
+
 const Reviews: React.FC = () => {
   const navigate = useNavigate();
   const [sortBy, setSortBy] = useState<'date' | 'alpha'>('date');
@@ -359,7 +365,7 @@ const Reviews: React.FC = () => {
                       lineHeight: 1.65,
                     }}
                   >
-                    {review.excerpt || review.text}
+                    {stripHtml(review.text).slice(0, 200).trimEnd()}…
                   </p>
                 </div>
                 {/* Score + date */}
