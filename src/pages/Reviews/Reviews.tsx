@@ -28,6 +28,7 @@ const formatDate = (iso: string): string => {
 const PUB_TYPES = ['Todos', 'Novela', 'Cómic', 'Antología', 'Audiolibro'];
 
 const Reviews: React.FC = () => {
+  const [sortBy, setSortBy] = useState<'date' | 'alpha'>('date');
   const [selectedType, setSelectedType] = useState('Todos');
   const [selectedKind, setSelectedKind] = useState<'ambos' | 'canon' | 'legends'>('ambos');
   const [minScore, setMinScore] = useState(0);
@@ -35,17 +36,24 @@ const Reviews: React.FC = () => {
   const { data, loading, error } = useApi(() => getReviews({ per_page: 100 }));
   const reviews: Review[] = data?.items ?? [];
 
-  const filtered = reviews.filter((r) => {
-    if (!r.publication) return false;
-    const pubTypeLabel = PUB_TYPE_LABEL[r.publication.pub_type] ?? '';
-    if (selectedType !== 'Todos' && pubTypeLabel !== selectedType) return false;
-    if (selectedKind !== 'ambos') {
-      const kind = r.publication.is_canon ? 'canon' : 'legends';
-      if (kind !== selectedKind) return false;
-    }
-    if (r.score < minScore) return false;
-    return true;
-  });
+  const filtered = reviews
+    .filter((r) => {
+      if (!r.publication) return false;
+      const pubTypeLabel = PUB_TYPE_LABEL[r.publication.pub_type] ?? '';
+      if (selectedType !== 'Todos' && pubTypeLabel !== selectedType) return false;
+      if (selectedKind !== 'ambos') {
+        const kind = r.publication.is_canon ? 'canon' : 'legends';
+        if (kind !== selectedKind) return false;
+      }
+      if (r.score < minScore) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'alpha') {
+        return (a.publication?.title ?? '').localeCompare(b.publication?.title ?? '', 'es');
+      }
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
 
   return (
     <div style={{ minHeight: '100vh', background: '#0A0A0F', display: 'flex', flexDirection: 'column' }}>
@@ -102,6 +110,44 @@ const Reviews: React.FC = () => {
               textTransform: 'uppercase',
               letterSpacing: '0.1em',
               color: '#5C5A52',
+              marginBottom: 16,
+            }}
+          >
+            Ordenar
+          </div>
+          {([['date', 'Fecha de reseña'], ['alpha', 'Alfabético']] as const).map(([val, label]) => (
+            <button
+              key={val}
+              onClick={() => setSortBy(val)}
+              style={{
+                display: 'block',
+                width: '100%',
+                background: sortBy === val ? 'rgba(201,168,76,0.1)' : 'none',
+                border: 'none',
+                borderLeft: `2px solid ${sortBy === val ? '#C9A84C' : 'transparent'}`,
+                color: sortBy === val ? '#C9A84C' : '#9C9788',
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: 14,
+                padding: '8px 12px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                marginBottom: 2,
+                transition: 'all 0.2s',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+
+          <div
+            style={{
+              fontFamily: "'Oswald', sans-serif",
+              fontWeight: 500,
+              fontSize: 13,
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              color: '#5C5A52',
+              marginTop: 28,
               marginBottom: 16,
             }}
           >
