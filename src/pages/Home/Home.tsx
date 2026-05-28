@@ -8,13 +8,8 @@ import SectionHeading from '../../components/SectionHeading/SectionHeading';
 import Stars from '../../components/Stars/Stars';
 import Flag from '../../components/Flag/Flag';
 import { ToneKey } from '../../types/publication';
-
-const STATS = [
-  { value: '437', label: 'Títulos indexados' },
-  { value: '12', label: 'Eras cronológicas' },
-  { value: '89', label: 'Reseñas publicadas' },
-  { value: '142', label: 'Colecciones' },
-];
+import useApi from '../../hooks/useApi';
+import { getStats } from '../../api/stats';
 
 const HERO_BOOKS: { title: string; author: string; tone: ToneKey; kind: 'canon' | 'legends'; rotation: number; top: number; left: number }[] = [
   { title: 'Amanecer del Jedi', author: 'John Ostrander', tone: 'A', kind: 'legends', rotation: -4, top: 20, left: 40 },
@@ -58,6 +53,14 @@ const RECENT_REVIEWS = [
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
+  const { data: statsData } = useApi(getStats);
+
+  const STATS = [
+    { value: statsData?.publications_count ?? '—', label: 'Títulos indexados' },
+    { value: statsData?.eras_count ?? '—', label: 'Eras cronológicas' },
+    { value: statsData?.reviews_count ?? '—', label: 'Reseñas publicadas' },
+    { value: statsData?.collections_count ?? '—', label: 'Colecciones' },
+  ];
 
   return (
     <div style={{ minHeight: '100vh', background: '#0A0A0F', display: 'flex', flexDirection: 'column' }}>
@@ -141,7 +144,7 @@ const Home: React.FC = () => {
                 marginBottom: 40,
               }}
             >
-              437 títulos del universo expandido ordenados cronológicamente. Canon y Leyendas. Novelas, cómics, audiolibros y antologías.
+              {statsData?.publications_count ?? '—'} títulos del universo expandido ordenados cronológicamente. Canon y Leyendas. Novelas, cómics, audiolibros y antologías.
             </p>
             <div style={{ display: 'flex', gap: 16 }}>
               <button
