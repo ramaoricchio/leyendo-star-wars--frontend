@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import BookCover from '../../components/BookCover/BookCover';
 import Stars from '../../components/Stars/Stars';
+import RichTextEditor from '../../components/RichTextEditor/RichTextEditor';
 import { ToneKey } from '../../types/publication';
 import { getCollections, createCollection, updateCollection } from '../../api/collections';
 import { getPublications, createPublication, updatePublication } from '../../api/publications';
@@ -313,17 +314,25 @@ const Admin: React.FC = () => {
     setRevForm({ publicationId: firstAvailable?.id ?? 0, score: 4, text: '', excerpt: '', date: new Date().toISOString().split('T')[0], youtubeUrl: '', isActive: true });
   };
 
+  const stripHtml = (html: string) => {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent ?? '';
+  };
+
   const handleSaveRev = async () => {
     setRevError('');
     if (revIsNew && revs.some((r) => r.publicationId === revForm.publicationId)) {
       setRevError('Esta publicación ya tiene una reseña.');
       return;
     }
+    const autoExcerpt = revForm.excerpt.trim()
+      || stripHtml(revForm.text).slice(0, 200).trimEnd() + '…';
     const payload = {
       publication_id: revForm.publicationId,
       score: revForm.score,
       text: revForm.text,
-      excerpt: revForm.excerpt || undefined,
+      excerpt: autoExcerpt,
       date: revForm.date,
       youtube_url: revForm.youtubeUrl || undefined,
       is_active: revForm.isActive,
@@ -1317,17 +1326,6 @@ const Admin: React.FC = () => {
                       />
                     </div>
 
-                    {/* Extracto */}
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <label style={labelStyle}>Extracto (opcional)</label>
-                      <input
-                        style={inputStyle}
-                        value={revForm.excerpt}
-                        onChange={(e) => setRevForm((prev) => ({ ...prev, excerpt: e.target.value }))}
-                        placeholder="Frase corta que resume la reseña..."
-                      />
-                    </div>
-
                     {/* YouTube URL */}
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label style={labelStyle}>Video de YouTube (opcional)</label>
@@ -1342,12 +1340,10 @@ const Admin: React.FC = () => {
 
                   {/* Texto */}
                   <div style={{ marginBottom: 24 }}>
-                    <label style={labelStyle}>Texto de la reseña (Markdown)</label>
-                    <textarea
-                      style={{ ...inputStyle, minHeight: 240, resize: 'vertical', fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}
+                    <label style={labelStyle}>Texto de la reseña</label>
+                    <RichTextEditor
                       value={revForm.text}
-                      onChange={(e) => setRevForm((prev) => ({ ...prev, text: e.target.value }))}
-                      placeholder="Escribí la reseña completa acá..."
+                      onChange={(html) => setRevForm((prev) => ({ ...prev, text: html }))}
                     />
                   </div>
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import TopNav from '../../components/Layout/TopNav';
 import Footer from '../../components/Layout/Footer';
 import BookCover from '../../components/BookCover/BookCover';
@@ -28,6 +29,7 @@ const formatDate = (iso: string): string => {
 const PUB_TYPES = ['Todos', 'Novela', 'Cómic', 'Antología', 'Audiolibro'];
 
 const Reviews: React.FC = () => {
+  const navigate = useNavigate();
   const [sortBy, setSortBy] = useState<'date' | 'alpha'>('date');
   const [selectedType, setSelectedType] = useState('Todos');
   const [selectedKind, setSelectedKind] = useState<'ambos' | 'canon' | 'legends'>('ambos');
@@ -314,6 +316,7 @@ const Reviews: React.FC = () => {
                 onMouseLeave={(e) => {
                   (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.05)';
                 }}
+                onClick={() => navigate(`/resenas/${review.id}`)}
               >
                 {/* Book cover */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

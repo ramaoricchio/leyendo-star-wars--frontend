@@ -8,6 +8,7 @@ import Collections from './pages/Collections/Collections';
 import CollectionDetail from './pages/CollectionDetail/CollectionDetail';
 import PublicationDetail from './pages/PublicationDetail/PublicationDetail';
 import Reviews from './pages/Reviews/Reviews';
+import ReviewDetail from './pages/ReviewDetail/ReviewDetail';
 import Search from './pages/Search/Search';
 import Admin from './pages/Admin/Admin';
 import UserProfile from './pages/UserProfile/UserProfile';
@@ -27,6 +28,7 @@ function App() {
             <Route path="/colecciones/:id" element={<CollectionDetail />} />
             <Route path="/publicaciones/:id" element={<PublicationDetail />} />
             <Route path="/resenas" element={<Reviews />} />
+            <Route path="/resenas/:id" element={<ReviewDetail />} />
             <Route path="/buscar" element={<Search />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/perfil" element={<UserProfile />} />
