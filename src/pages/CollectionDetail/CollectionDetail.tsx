@@ -18,7 +18,7 @@ const safeTone = (raw: string | undefined, id: number, offset: number): ToneKey 
 const CollectionDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: col, loading, error } = useApi(() => getCollection(Number(id)));
+  const { data: col, loading, error } = useApi(() => getCollection(Number(id)), [id]);
 
   const kind: 'canon' | 'legends' = col?.is_canon ? 'canon' : 'legends';
   const accentColor = kind === 'canon' ? '#4B8FD9' : '#C25555';
@@ -351,7 +351,7 @@ const PubCard: React.FC<{ pub: Publication; collectionKind: 'canon' | 'legends' 
           padding: '24px 0 16px',
         }}
       >
-        <BookCover title={pub.title} tone={tone} kind={kind} w={100} ratio={1.5} badge={false} />
+        <BookCover title={pub.title} tone={tone} kind={kind} w={100} ratio={1.5} badge={false} imageUrl={pub.cover_urls?.[0] || undefined} />
       </div>
 
       {/* Info */}

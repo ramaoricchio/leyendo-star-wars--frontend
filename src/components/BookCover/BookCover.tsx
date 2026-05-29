@@ -22,6 +22,7 @@ interface BookCoverProps {
   year?: number;
   code?: string;
   badge?: boolean;
+  imageUrl?: string;
 }
 
 const BookCover: React.FC<BookCoverProps> = ({
@@ -34,6 +35,7 @@ const BookCover: React.FC<BookCoverProps> = ({
   year,
   code,
   badge = true,
+  imageUrl,
 }) => {
   const h = Math.round(w * ratio);
   const [dark, light] = TONES[tone];
@@ -52,6 +54,20 @@ const BookCover: React.FC<BookCoverProps> = ({
         boxShadow: '4px 4px 16px rgba(0,0,0,0.6)',
       }}
     >
+      {/* Real cover image */}
+      {imageUrl && (
+        <img
+          src={imageUrl}
+          alt={title}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+          }}
+        />
+      )}
       {/* Spine highlight */}
       <div
         style={{

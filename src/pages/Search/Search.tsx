@@ -270,7 +270,7 @@ const ResultItem: React.FC<{ result: Publication }> = ({ result }) => {
       onMouseEnter={(e) => (e.currentTarget as HTMLDivElement).style.opacity = '0.75'}
       onMouseLeave={(e) => (e.currentTarget as HTMLDivElement).style.opacity = '1'}
     >
-      <BookCover title={result.title} author={result.author} tone={tone} kind={kind} w={52} ratio={1.5} badge={false} />
+      <BookCover title={result.title} author={result.author} tone={tone} kind={kind} w={52} ratio={1.5} badge={false} imageUrl={result.cover_urls?.[0] || undefined} />
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
           <Flag kind={kind} size="sm" />

@@ -124,6 +124,13 @@ const ByYear: React.FC = () => {
               }}
               onMouseEnter={(e) => (e.target as HTMLButtonElement).style.color = '#C9A84C'}
               onMouseLeave={(e) => (e.target as HTMLButtonElement).style.color = '#5C5A52'}
+              onClick={() => {
+                const nextDecade = DECADES[i + 1] ?? Infinity;
+                const target = sortedYears.find((y) => y >= decade && y < nextDecade);
+                if (target) {
+                  document.getElementById(`year-${target}`)?.scrollIntoView({ behavior: 'smooth' });
+                }
+              }}
             >
               {decade}
             </button>
@@ -175,6 +182,7 @@ const ByYear: React.FC = () => {
           return (
             <div
               key={year}
+              id={`year-${year}`}
               style={{
                 marginBottom: 64,
                 display: 'flex',
@@ -247,6 +255,7 @@ const ByYear: React.FC = () => {
                         kind={kind}
                         w={110}
                         ratio={1.5}
+                        imageUrl={pub.cover_urls?.[0] || undefined}
                       />
                       <Flag kind={kind} size="sm" />
                       <div

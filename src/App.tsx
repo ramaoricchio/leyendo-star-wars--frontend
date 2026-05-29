@@ -13,6 +13,8 @@ import Search from './pages/Search/Search';
 import Admin from './pages/Admin/Admin';
 import UserProfile from './pages/UserProfile/UserProfile';
 import Login from './pages/Login/Login';
+import Register from './pages/Register/Register';
+import VerifyEmail from './pages/VerifyEmail/VerifyEmail';
 
 function App() {
   return (
@@ -22,6 +24,8 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/timeline" element={<Timeline />} />
             <Route path="/por-anno" element={<ByYear />} />
             <Route path="/colecciones" element={<Collections />} />

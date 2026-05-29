@@ -10,12 +10,14 @@ import Flag from '../../components/Flag/Flag';
 import { ToneKey } from '../../types/publication';
 import useApi from '../../hooks/useApi';
 import { getStats } from '../../api/stats';
+import { getPublications } from '../../api/publications';
+import { getReviews } from '../../api/reviews';
 
-const HERO_BOOKS: { title: string; author: string; tone: ToneKey; kind: 'canon' | 'legends'; rotation: number; top: number; left: number }[] = [
-  { title: 'Amanecer del Jedi', author: 'John Ostrander', tone: 'A', kind: 'legends', rotation: -4, top: 20, left: 40 },
-  { title: 'Alta República', author: 'Claudia Gray', tone: 'E', kind: 'canon', rotation: 2, top: 60, left: 120 },
-  { title: 'Darth Plagueis', author: 'James Luceno', tone: 'D', kind: 'legends', rotation: 3, top: 10, left: 220 },
-  { title: 'Thrawn', author: 'Timothy Zahn', tone: 'C', kind: 'canon', rotation: -6, top: 80, left: 300 },
+const HERO_POSITIONS: { rotation: number; top: number; left: number }[] = [
+  { rotation: -4, top: 20, left: 40 },
+  { rotation: 2, top: 60, left: 120 },
+  { rotation: 3, top: 10, left: 220 },
+  { rotation: -6, top: 80, left: 300 },
 ];
 
 const FEATURE_CARDS = [
@@ -45,15 +47,25 @@ const FEATURE_CARDS = [
   },
 ];
 
-const RECENT_REVIEWS = [
-  { title: 'La Alta República: Luz de los Jedi', author: 'Charles Soule', score: 4.5, tone: 'E' as ToneKey, kind: 'canon' as const, excerpt: 'Un comienzo épico para la era más luminosa de los Jedi. Soule construye un universo vivo y amenazante.', date: '12 may 2026' },
-  { title: 'Thrawn', author: 'Timothy Zahn', score: 5, tone: 'C' as ToneKey, kind: 'canon' as const, excerpt: 'El regreso del gran almirante es tan brillante como uno esperaba. Imprescindible.', date: '3 may 2026' },
-  { title: 'Darth Plagueis', author: 'James Luceno', score: 4, tone: 'D' as ToneKey, kind: 'legends' as const, excerpt: 'El origen del Sith más poderoso, narrado con una densidad política que pocos libros de SW alcanzan.', date: '28 abr 2026' },
-];
+const deriveTone = (id: number): ToneKey =>
+  String.fromCharCode(65 + (id % 8)) as ToneKey;
+
+const formatDate = (iso: string): string => {
+  const d = new Date(iso);
+  const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+};
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const { data: statsData } = useApi(getStats);
+  const { data: pubsData } = useApi(() => getPublications({ per_page: 4 }));
+  const { data: reviewsData } = useApi(() => getReviews({ per_page: 6 }));
+
+  const heroBooks = pubsData?.items ?? [];
+  const recentReviews = (reviewsData?.items ?? [])
+    .filter((r) => r.is_active !== false)
+    .slice(0, 3);
 
   const STATS = [
     { value: statsData?.publications_count ?? '—', label: 'Títulos indexados' },
@@ -224,24 +236,27 @@ const Home: React.FC = () => {
 
           {/* Right: Book covers composition */}
           <div style={{ position: 'relative', height: 480 }}>
-            {HERO_BOOKS.map((book, i) => (
+            {heroBooks.slice(0, 4).map((pub, i) => (
               <div
-                key={i}
+                key={pub.id}
+                onClick={() => navigate(`/publicaciones/${pub.id}`)}
                 style={{
                   position: 'absolute',
-                  top: book.top,
-                  left: book.left,
-                  transform: `rotate(${book.rotation}deg)`,
+                  top: HERO_POSITIONS[i].top,
+                  left: HERO_POSITIONS[i].left,
+                  transform: `rotate(${HERO_POSITIONS[i].rotation}deg)`,
                   transition: 'transform 0.3s',
+                  cursor: 'pointer',
                 }}
               >
                 <BookCover
-                  title={book.title}
-                  author={book.author}
-                  tone={book.tone}
-                  kind={book.kind}
+                  title={pub.title}
+                  author={pub.author}
+                  tone={deriveTone(pub.id)}
+                  kind={pub.is_canon ? 'canon' : 'legends'}
                   w={140}
                   ratio={1.5}
+                  imageUrl={pub.cover_urls?.[0] || undefined}
                 />
               </div>
             ))}
@@ -362,80 +377,108 @@ const Home: React.FC = () => {
           action="Ver todas"
           onAction={() => navigate('/resenas')}
         />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
-          {RECENT_REVIEWS.map((r, i) => (
-            <div
-              key={i}
-              style={{
-                background: '#14141C',
-                border: '1px solid rgba(201,168,76,0.1)',
-                borderRadius: 10,
-                padding: 24,
-                display: 'flex',
-                gap: 20,
-                cursor: 'pointer',
-                transition: 'border-color 0.2s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(201,168,76,0.25)'}
-              onMouseLeave={(e) => (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(201,168,76,0.1)'}
-            >
-              <BookCover title={r.title} author={r.author} tone={r.tone} kind={r.kind} w={72} ratio={1.5} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <Flag kind={r.kind} size="sm" />
-                <h4
-                  style={{
-                    fontFamily: "'Oswald', sans-serif",
-                    fontWeight: 500,
-                    fontSize: 16,
-                    textTransform: 'uppercase',
-                    color: '#F2EEDF',
-                    marginTop: 8,
-                    marginBottom: 4,
-                    lineHeight: 1.1,
-                  }}
-                >
-                  {r.title}
-                </h4>
+        {recentReviews.length === 0 ? (
+          <div
+            style={{
+              fontFamily: "'DM Sans', sans-serif",
+              fontSize: 14,
+              color: '#5C5A52',
+              padding: '24px 0',
+            }}
+          >
+            Todavía no hay reseñas publicadas.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+            {recentReviews.map((review) => {
+              const pub = review.publication!;
+              const kind: 'canon' | 'legends' = pub.is_canon ? 'canon' : 'legends';
+              return (
                 <div
+                  key={review.id}
+                  onClick={() => navigate(`/resenas/${review.id}`)}
                   style={{
-                    fontFamily: "'DM Sans', sans-serif",
-                    fontSize: 12,
-                    color: '#5C5A52',
-                    marginBottom: 10,
+                    background: '#14141C',
+                    border: '1px solid rgba(201,168,76,0.1)',
+                    borderRadius: 10,
+                    padding: 24,
+                    display: 'flex',
+                    gap: 20,
+                    cursor: 'pointer',
+                    transition: 'border-color 0.2s',
                   }}
+                  onMouseEnter={(e) => (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(201,168,76,0.25)'}
+                  onMouseLeave={(e) => (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(201,168,76,0.1)'}
                 >
-                  {r.author}
+                  <BookCover
+                    title={pub.title}
+                    author={pub.author}
+                    tone={deriveTone(pub.id)}
+                    kind={kind}
+                    w={72}
+                    ratio={1.5}
+                    imageUrl={pub.cover_urls?.[0] || undefined}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <Flag kind={kind} size="sm" />
+                    <h4
+                      style={{
+                        fontFamily: "'Oswald', sans-serif",
+                        fontWeight: 500,
+                        fontSize: 16,
+                        textTransform: 'uppercase',
+                        color: '#F2EEDF',
+                        marginTop: 8,
+                        marginBottom: 4,
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      {pub.title}
+                    </h4>
+                    <div
+                      style={{
+                        fontFamily: "'DM Sans', sans-serif",
+                        fontSize: 12,
+                        color: '#5C5A52',
+                        marginBottom: 10,
+                      }}
+                    >
+                      {pub.author}
+                    </div>
+                    <Stars value={review.score} />
+                    {review.excerpt && (
+                      <p
+                        style={{
+                          fontFamily: "'DM Sans', sans-serif",
+                          fontSize: 13,
+                          color: '#9C9788',
+                          lineHeight: 1.5,
+                          marginTop: 10,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {review.excerpt}
+                      </p>
+                    )}
+                    <div
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 11,
+                        color: '#5C5A52',
+                        marginTop: 12,
+                      }}
+                    >
+                      {formatDate(review.date)}
+                    </div>
+                  </div>
                 </div>
-                <Stars value={r.score} />
-                <p
-                  style={{
-                    fontFamily: "'DM Sans', sans-serif",
-                    fontSize: 13,
-                    color: '#9C9788',
-                    lineHeight: 1.5,
-                    marginTop: 10,
-                    display: '-webkit-box',
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {r.excerpt}
-                </p>
-                <div
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 11,
-                    color: '#5C5A52',
-                    marginTop: 12,
-                  }}
-                >
-                  {r.date}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       <Footer />

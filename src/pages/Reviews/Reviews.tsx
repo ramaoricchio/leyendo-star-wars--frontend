@@ -326,7 +326,7 @@ const Reviews: React.FC = () => {
               >
                 {/* Book cover */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <BookCover title={pub.title} author={pub.author} tone={tone} kind={kind} w={88} ratio={1.5} />
+                  <BookCover title={pub.title} author={pub.author} tone={tone} kind={kind} w={88} ratio={1.5} imageUrl={pub.cover_urls?.[0] || undefined} />
                 </div>
                 {/* Meta + excerpt */}
                 <div>

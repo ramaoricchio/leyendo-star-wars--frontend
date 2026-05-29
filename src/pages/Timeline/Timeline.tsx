@@ -442,6 +442,7 @@ const Timeline: React.FC = () => {
                     kind={pub.is_canon ? 'canon' : 'legends'}
                     w={130}
                     ratio={1.5}
+                    imageUrl={pub.cover_urls?.[0] || undefined}
                   />
                 </div>
               ))

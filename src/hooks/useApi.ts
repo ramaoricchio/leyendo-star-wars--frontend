@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, DependencyList } from 'react';
 
-function useApi<T>(fn: () => Promise<T>) {
+// eslint-disable-next-line react-hooks/exhaustive-deps
+function useApi<T>(fn: () => Promise<T>, deps: DependencyList = []) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetch = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -20,7 +22,7 @@ function useApi<T>(fn: () => Promise<T>) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, deps);
 
   useEffect(() => {
     fetch();

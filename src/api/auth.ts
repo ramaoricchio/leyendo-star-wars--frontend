@@ -8,6 +8,7 @@ export interface LoginResponse {
     email: string;
     roles: string[];
     is_active: boolean;
+    email_verified: boolean;
     created_at: string;
   };
 }
@@ -24,4 +25,16 @@ export const logout = async (): Promise<void> => {
 export const getMe = async () => {
   const response = await api.get('/auth/me');
   return response.data.data;
+};
+
+export const register = async (username: string, email: string, password: string): Promise<void> => {
+  await api.post('/auth/register', { username, email, password });
+};
+
+export const verifyEmail = async (token: string): Promise<void> => {
+  await api.get(`/auth/verify-email?token=${token}`);
+};
+
+export const resendVerification = async (email: string): Promise<void> => {
+  await api.post('/auth/resend-verification', { email });
 };

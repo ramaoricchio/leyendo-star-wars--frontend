@@ -24,6 +24,7 @@ interface PubItem {
   era: string;
   description: string;
   collectionId?: number;
+  coverUrls?: string[];
 }
 
 interface ColItem {
@@ -86,6 +87,7 @@ const Admin: React.FC = () => {
     description: '',
     buyLinks: '',
     reviewText: '',
+    coverUrls: [''],
   });
 
   // — Colecciones state —
@@ -164,6 +166,7 @@ const Admin: React.FC = () => {
         era: p.era ?? '',
         description: p.description ?? '',
         collectionId: p.collection_id,
+        coverUrls: p.cover_urls ?? [],
       }));
       setPubs(mapped);
     });
@@ -215,6 +218,7 @@ const Admin: React.FC = () => {
       description: pub.description,
       buyLinks: '',
       reviewText: '',
+      coverUrls: pub.coverUrls?.length ? pub.coverUrls : [''],
     });
   };
 
@@ -225,7 +229,7 @@ const Admin: React.FC = () => {
     setSelectedId(null);
     setIsCanon(true);
     setReviewScore(4);
-    setFormData({ title: '', author: '', year: '', pubType: 'Novela', era: 'Alta República', isbn: '', publisher: '', collection: '', pages: '', description: '', buyLinks: '', reviewText: '' });
+    setFormData({ title: '', author: '', year: '', pubType: 'Novela', era: 'Alta República', isbn: '', publisher: '', collection: '', pages: '', description: '', buyLinks: '', reviewText: '', coverUrls: [''] });
   };
 
   const handleSavePub = async () => {
@@ -245,6 +249,7 @@ const Admin: React.FC = () => {
       era: formData.era,
       is_canon: isCanon,
       collection_id: collectionId,
+      cover_urls: formData.coverUrls.filter(Boolean).length ? formData.coverUrls.filter(Boolean) : undefined,
     };
     try {
       if (pubIsNew) {
@@ -262,6 +267,7 @@ const Admin: React.FC = () => {
           era: created.era ?? '',
           description: created.description ?? '',
           collectionId: created.collection_id,
+          coverUrls: created.cover_urls ?? [],
         };
         setPubs((prev) => [...prev, newItem]);
         setPubIsNew(false);
@@ -271,7 +277,7 @@ const Admin: React.FC = () => {
         setPubs((prev) =>
           prev.map((p) =>
             p.id === selectedId
-              ? { ...p, title: updated.title, author: updated.author, pubType: updated.pub_type, year: updated.year ?? 0, kind: updated.is_canon ? 'canon' : 'legends', isbn: updated.isbn ?? '', publisher: updated.publisher ?? '', era: updated.era ?? '', description: updated.description ?? '', collectionId: updated.collection_id }
+              ? { ...p, title: updated.title, author: updated.author, pubType: updated.pub_type, year: updated.year ?? 0, kind: updated.is_canon ? 'canon' : 'legends', isbn: updated.isbn ?? '', publisher: updated.publisher ?? '', era: updated.era ?? '', description: updated.description ?? '', collectionId: updated.collection_id, coverUrls: updated.cover_urls ?? [] }
               : p
           )
         );
@@ -286,6 +292,22 @@ const Admin: React.FC = () => {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     setFormData((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const handleCoverUrlChange = (index: number, value: string) => {
+    setFormData((prev) => {
+      const urls = [...prev.coverUrls];
+      urls[index] = value;
+      return { ...prev, coverUrls: urls };
+    });
+  };
+
+  const handleAddCoverUrl = () => {
+    setFormData((prev) => ({ ...prev, coverUrls: [...prev.coverUrls, ''] }));
+  };
+
+  const handleRemoveCoverUrl = (index: number) => {
+    setFormData((prev) => ({ ...prev, coverUrls: prev.coverUrls.filter((_, i) => i !== index) }));
   };
 
   // — helpers para cruzar publicaciones en el tab Reseñas —
@@ -1071,10 +1093,39 @@ const Admin: React.FC = () => {
             {/* Portadas */}
             <div style={{ marginBottom: 20 }}>
               <label style={labelStyle}>URLs de portadas</label>
-              <input style={inputStyle} placeholder="https://..." />
+              {formData.coverUrls.map((url, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <input
+                    style={{ ...inputStyle, flex: 1 }}
+                    placeholder="https://..."
+                    value={url}
+                    onChange={(e) => handleCoverUrlChange(i, e.target.value)}
+                  />
+                  {formData.coverUrls.length > 1 && (
+                    <button
+                      onClick={() => handleRemoveCoverUrl(i)}
+                      style={{
+                        background: 'none',
+                        border: '1px solid rgba(194,85,85,0.3)',
+                        borderRadius: 6,
+                        color: '#C25555',
+                        fontSize: 18,
+                        width: 36,
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
               <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
-                <BookCover title={formData.title} author={formData.author} tone="C" kind={isCanon ? 'canon' : 'legends'} w={80} ratio={1.5} />
+                {formData.coverUrls.map((url, i) => (
+                  <BookCover key={i} title={formData.title} author={formData.author} tone="C" kind={isCanon ? 'canon' : 'legends'} w={80} ratio={1.5} imageUrl={url || undefined} />
+                ))}
                 <div
+                  onClick={handleAddCoverUrl}
                   style={{
                     width: 80,
                     height: 120,

@@ -138,7 +138,7 @@ const PublicationDetail: React.FC = () => {
   const [activeAlt, setActiveAlt] = useState(0);
   const [collectionBooks, setCollectionBooks] = useState<Publication[]>([]);
 
-  const { data: pub, loading, error } = useApi(() => getPublication(pubId));
+  const { data: pub, loading, error } = useApi(() => getPublication(pubId), [pubId]);
 
   useEffect(() => {
     if (!pub?.collection_id) return;
@@ -199,6 +199,8 @@ const PublicationDetail: React.FC = () => {
   const alts = altTones(pub.id);
   const activeTone = activeAlt === 0 ? tone : alts[activeAlt - 1];
   const buyLinks = pub.buy_links ? Object.entries(pub.buy_links) : [];
+  const coverUrls = pub.cover_urls ?? [];
+  const hasCoverImages = coverUrls.length > 0;
 
   return (
     <div style={{ minHeight: '100vh', background: '#0A0A0F', display: 'flex', flexDirection: 'column' }}>
@@ -263,30 +265,40 @@ const PublicationDetail: React.FC = () => {
               kind={kind}
               w={240}
               ratio={1.5}
+              imageUrl={hasCoverImages ? (coverUrls[activeAlt] ?? coverUrls[0]) : undefined}
             />
             {/* Alt covers */}
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              {[tone, ...alts].map((t, i) => (
-                <div
-                  key={i}
-                  onClick={() => setActiveAlt(i)}
-                  style={{
-                    cursor: 'pointer',
-                    border: `2px solid ${activeAlt === i ? '#C9A84C' : 'transparent'}`,
-                    borderRadius: 4,
-                    overflow: 'hidden',
-                  }}
-                >
-                  <BookCover
-                    title={pub.title}
-                    tone={t}
-                    kind={kind}
-                    w={56}
-                    ratio={1.5}
-                    badge={false}
-                  />
-                </div>
-              ))}
+              {hasCoverImages
+                ? coverUrls.map((url, i) => (
+                    <div
+                      key={i}
+                      onClick={() => setActiveAlt(i)}
+                      style={{
+                        cursor: 'pointer',
+                        border: `2px solid ${activeAlt === i ? '#C9A84C' : 'transparent'}`,
+                        borderRadius: 4,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <BookCover title={pub.title} tone={tone} kind={kind} w={56} ratio={1.5} badge={false} imageUrl={url} />
+                    </div>
+                  ))
+                : [tone, ...alts].map((t, i) => (
+                    <div
+                      key={i}
+                      onClick={() => setActiveAlt(i)}
+                      style={{
+                        cursor: 'pointer',
+                        border: `2px solid ${activeAlt === i ? '#C9A84C' : 'transparent'}`,
+                        borderRadius: 4,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <BookCover title={pub.title} tone={t} kind={kind} w={56} ratio={1.5} badge={false} />
+                    </div>
+                  ))
+              }
             </div>
             {/* Buy box */}
             {buyLinks.length > 0 && (
@@ -513,6 +525,7 @@ const PublicationDetail: React.FC = () => {
                       w={48}
                       ratio={1.5}
                       badge={false}
+                      imageUrl={book.cover_urls?.[0] || undefined}
                     />
                     <div>
                       <div

@@ -33,7 +33,7 @@ const extractYoutubeId = (url: string): string | null => {
 const ReviewDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: review, loading, error } = useApi(() => getReview(Number(id)));
+  const { data: review, loading, error } = useApi(() => getReview(Number(id)), [id]);
 
   const pub = review?.publication;
   const kind: 'canon' | 'legends' = pub?.is_canon ? 'canon' : 'legends';
@@ -128,7 +128,7 @@ const ReviewDetail: React.FC = () => {
           >
             {/* Left column */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              <BookCover title={pub.title} author={pub.author} tone={tone} kind={kind} w={200} ratio={1.5} />
+              <BookCover title={pub.title} author={pub.author} tone={tone} kind={kind} w={200} ratio={1.5} imageUrl={pub.cover_urls?.[0] || undefined} />
 
               {/* Score */}
               <div style={{ textAlign: 'center' }}>

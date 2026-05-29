@@ -12,6 +12,8 @@ const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const isVerificationError = error?.toLowerCase().includes('verificar');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
@@ -118,16 +120,33 @@ const Login: React.FC = () => {
           >
             {/* Error */}
             {error && (
-              <div style={{
-                background: 'rgba(194,85,85,0.1)',
-                border: '1px solid rgba(194,85,85,0.4)',
-                color: '#C25555',
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 12,
-                padding: '10px 14px',
-                letterSpacing: '0.06em',
-              }}>
-                {error}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{
+                  background: 'rgba(194,85,85,0.1)',
+                  border: '1px solid rgba(194,85,85,0.4)',
+                  color: '#C25555',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 12,
+                  padding: '10px 14px',
+                  letterSpacing: '0.06em',
+                }}>
+                  {error}
+                </div>
+                {isVerificationError && (
+                  <span
+                    onClick={() => navigate('/verify-email')}
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 11,
+                      color: '#C9A84C',
+                      letterSpacing: '0.1em',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    ¿No recibiste el mail? Solicitá uno nuevo →
+                  </span>
+                )}
               </div>
             )}
 
@@ -186,7 +205,7 @@ const Login: React.FC = () => {
             </button>
 
             {/* Separador */}
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 16, textAlign: 'center' }}>
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span
                 onClick={() => navigate('/')}
                 style={{
@@ -201,7 +220,23 @@ const Login: React.FC = () => {
                 onMouseEnter={(e) => ((e.target as HTMLElement).style.color = '#9C9788')}
                 onMouseLeave={(e) => ((e.target as HTMLElement).style.color = '#5C5A52')}
               >
-                ← Volver al inicio
+                ← Inicio
+              </span>
+              <span
+                onClick={() => navigate('/register')}
+                style={{
+                  fontFamily: "'Oswald', sans-serif",
+                  fontSize: 12,
+                  color: '#5C5A52',
+                  letterSpacing: '0.18em',
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                  transition: 'color 0.2s',
+                }}
+                onMouseEnter={(e) => ((e.target as HTMLElement).style.color = '#9C9788')}
+                onMouseLeave={(e) => ((e.target as HTMLElement).style.color = '#5C5A52')}
+              >
+                Crear cuenta →
               </span>
             </div>
           </form>
