@@ -1,4 +1,6 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
+import { trackPageView } from './analytics';
 import { AuthProvider } from './context/AuthContext';
 import { LoadingProvider } from './context/LoadingContext';
 import Home from './pages/Home/Home';
@@ -16,11 +18,20 @@ import Login from './pages/Login/Login';
 import Register from './pages/Register/Register';
 import VerifyEmail from './pages/VerifyEmail/VerifyEmail';
 
+function RouteTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    trackPageView(location.pathname + location.search);
+  }, [location]);
+  return null;
+}
+
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <LoadingProvider>
+          <RouteTracker />
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />

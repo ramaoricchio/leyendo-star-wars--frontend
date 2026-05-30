@@ -16,6 +16,8 @@ export interface Publication {
   collection_id?: number;
   cover_urls?: string[];
   buy_links?: Record<string, string>;
+  pages?: number;
+  video_urls?: Record<string, string>;
   created_at: string;
   updated_at: string;
 }

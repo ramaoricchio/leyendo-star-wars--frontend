@@ -8,119 +8,14 @@ import useApi from '../../hooks/useApi';
 import { getPublication, getPublications } from '../../api/publications';
 import { Publication, ToneKey } from '../../types/publication';
 
-// VideoCard local component
-interface VideoCardProps {
-  title: string;
-  channel: string;
-  duration: string;
-  views: string;
-  featured?: boolean;
-  tone?: string;
-}
-
-const VideoCard: React.FC<VideoCardProps> = ({ title, channel, duration, views, featured = false, tone = '#1C1C26' }) => (
-  <div
-    style={{
-      background: tone,
-      borderRadius: 8,
-      overflow: 'hidden',
-      position: 'relative',
-      cursor: 'pointer',
-      border: '1px solid rgba(201,168,76,0.1)',
-      height: featured ? 220 : 160,
-    }}
-  >
-    <div
-      style={{
-        position: 'absolute',
-        inset: 0,
-        background: 'linear-gradient(135deg, rgba(20,20,28,0.8) 0%, rgba(40,30,20,0.4) 100%)',
-      }}
-    />
-    <div
-      style={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: featured ? 56 : 40,
-        height: featured ? 56 : 40,
-        background: 'rgba(201,168,76,0.9)',
-        borderRadius: '50%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <div
-        style={{
-          width: 0,
-          height: 0,
-          borderTop: `${featured ? 9 : 6}px solid transparent`,
-          borderBottom: `${featured ? 9 : 6}px solid transparent`,
-          borderLeft: `${featured ? 14 : 10}px solid #0A0A0F`,
-          marginLeft: 3,
-        }}
-      />
-    </div>
-    <div
-      style={{
-        position: 'absolute',
-        bottom: 40,
-        right: 10,
-        background: 'rgba(0,0,0,0.7)',
-        borderRadius: 3,
-        padding: '2px 6px',
-        fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 11,
-        color: '#F2EEDF',
-      }}
-    >
-      {duration}
-    </div>
-    <div
-      style={{
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        padding: '8px 12px',
-        background: 'linear-gradient(0deg, rgba(0,0,0,0.9), transparent)',
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "'DM Sans', sans-serif",
-          fontWeight: 500,
-          fontSize: featured ? 14 : 12,
-          color: '#F2EEDF',
-          lineHeight: 1.3,
-          overflow: 'hidden',
-          whiteSpace: 'nowrap',
-          textOverflow: 'ellipsis',
-        }}
-      >
-        {title}
-      </div>
-      <div
-        style={{
-          fontFamily: "'DM Sans', sans-serif",
-          fontSize: 11,
-          color: '#9C9788',
-          marginTop: 2,
-        }}
-      >
-        {channel} · {views}
-      </div>
-    </div>
-  </div>
-);
-
-const VIDEOS = [
-  { title: 'Star Wars: La historia completa | Análisis', channel: 'Jedi Archive', duration: '42:18', views: '284K vistas', featured: true },
-  { title: 'Ranking de libros de Star Wars de peor a mejor', channel: 'Leyendo SW', duration: '18:05', views: '67K vistas' },
-  { title: 'Por qué leer el universo expandido', channel: 'HoloNet Talks', duration: '22:30', views: '143K vistas' },
-];
+const extractYouTubeId = (url: string): string | null => {
+  try {
+    const u = new URL(url);
+    return u.searchParams.get('v') ?? u.pathname.split('/').pop() ?? null;
+  } catch {
+    return null;
+  }
+};
 
 const deriveTone = (id: number): ToneKey =>
   String.fromCharCode(65 + (id % 8)) as ToneKey;
@@ -442,6 +337,7 @@ const PublicationDetail: React.FC = () => {
                 { label: 'Editorial', value: pub.publisher ?? '—' },
                 { label: 'ISBN', value: pub.isbn ?? '—' },
                 { label: 'Era', value: pub.era },
+                ...(pub.pages ? [{ label: 'Páginas', value: pub.pages.toString() }] : []),
               ].map((row) => (
                 <div
                   key={row.label}
@@ -557,41 +453,120 @@ const PublicationDetail: React.FC = () => {
         </div>
 
         {/* Videos section */}
-        <div style={{ marginBottom: 64 }}>
-          <div
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 12,
-              color: '#C9A84C',
-              letterSpacing: '0.1em',
-              marginBottom: 8,
-            }}
-          >
-            // contenido relacionado
-          </div>
-          <h2
-            style={{
-              fontFamily: "'Oswald', sans-serif",
-              fontWeight: 600,
-              fontSize: 28,
-              textTransform: 'uppercase',
-              color: '#F2EEDF',
-              marginBottom: 24,
-              letterSpacing: '0.02em',
-            }}
-          >
-            Videos
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-            <div style={{ gridColumn: '1 / 2' }}>
-              <VideoCard {...VIDEOS[0]} featured={true} tone="#2a1a3e" />
+        {pub.video_urls && Object.keys(pub.video_urls).length > 0 && (
+          <div style={{ marginBottom: 64 }}>
+            <div
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 12,
+                color: '#C9A84C',
+                letterSpacing: '0.1em',
+                marginBottom: 8,
+              }}
+            >
+              // contenido relacionado
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <VideoCard {...VIDEOS[1]} tone="#1a3a3e" />
-              <VideoCard {...VIDEOS[2]} tone="#1a2a3a" />
+            <h2
+              style={{
+                fontFamily: "'Oswald', sans-serif",
+                fontWeight: 600,
+                fontSize: 28,
+                textTransform: 'uppercase',
+                color: '#F2EEDF',
+                marginBottom: 24,
+                letterSpacing: '0.02em',
+              }}
+            >
+              Videos
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+              {Object.entries(pub.video_urls).map(([title, url]) => {
+                const videoId = extractYouTubeId(url);
+                const thumb = videoId
+                  ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+                  : undefined;
+                return (
+                  <a
+                    key={title}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: 'none' }}
+                  >
+                    <div
+                      style={{
+                        background: '#14141C',
+                        borderRadius: 8,
+                        overflow: 'hidden',
+                        border: '1px solid rgba(201,168,76,0.1)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: 'relative',
+                          height: 160,
+                          background: thumb ? `url(${thumb}) center/cover` : '#1C1C26',
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.7) 100%)',
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '50%',
+                            left: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            width: 44,
+                            height: 44,
+                            background: 'rgba(201,168,76,0.9)',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 0,
+                              height: 0,
+                              borderTop: '7px solid transparent',
+                              borderBottom: '7px solid transparent',
+                              borderLeft: '12px solid #0A0A0F',
+                              marginLeft: 3,
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ padding: '10px 14px' }}>
+                        <div
+                          style={{
+                            fontFamily: "'DM Sans', sans-serif",
+                            fontWeight: 500,
+                            fontSize: 13,
+                            color: '#F2EEDF',
+                            lineHeight: 1.4,
+                            overflow: 'hidden',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                          }}
+                        >
+                          {title}
+                        </div>
+                      </div>
+                    </div>
+                  </a>
+                );
+              })}
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       <Footer />

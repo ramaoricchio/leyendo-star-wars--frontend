@@ -126,8 +126,12 @@ const ByYear: React.FC = () => {
               onMouseLeave={(e) => (e.target as HTMLButtonElement).style.color = '#5C5A52'}
               onClick={() => {
                 const nextDecade = DECADES[i + 1] ?? Infinity;
-                const target = sortedYears.find((y) => y >= decade && y < nextDecade);
-                if (target) {
+                const target =
+                  sortedYears.find((y) => y >= decade && y < nextDecade) ??
+                  sortedYears.reduce((closest, y) =>
+                    Math.abs(y - decade) < Math.abs(closest - decade) ? y : closest
+                  );
+                if (target !== undefined) {
                   document.getElementById(`year-${target}`)?.scrollIntoView({ behavior: 'smooth' });
                 }
               }}

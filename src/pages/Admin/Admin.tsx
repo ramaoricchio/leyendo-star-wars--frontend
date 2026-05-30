@@ -25,6 +25,9 @@ interface PubItem {
   description: string;
   collectionId?: number;
   coverUrls?: string[];
+  buy_links?: Record<string, string>;
+  video_urls?: Record<string, string>;
+  pages?: number;
 }
 
 interface ColItem {
@@ -85,7 +88,8 @@ const Admin: React.FC = () => {
     collection: '',
     pages: '',
     description: '',
-    buyLinks: '',
+    buyLinks: [{ name: '', url: '' }] as { name: string; url: string }[],
+    videoLinks: [{ name: '', url: '' }] as { name: string; url: string }[],
     reviewText: '',
     coverUrls: [''],
   });
@@ -167,6 +171,9 @@ const Admin: React.FC = () => {
         description: p.description ?? '',
         collectionId: p.collection_id,
         coverUrls: p.cover_urls ?? [],
+        buy_links: p.buy_links,
+        video_urls: p.video_urls,
+        pages: p.pages,
       }));
       setPubs(mapped);
     });
@@ -216,7 +223,12 @@ const Admin: React.FC = () => {
       collection: colName,
       pages: '',
       description: pub.description,
-      buyLinks: '',
+      buyLinks: pub.buy_links && Object.keys(pub.buy_links).length
+        ? Object.entries(pub.buy_links).map(([name, url]) => ({ name, url }))
+        : [{ name: '', url: '' }],
+      videoLinks: pub.video_urls && Object.keys(pub.video_urls).length
+        ? Object.entries(pub.video_urls).map(([name, url]) => ({ name, url }))
+        : [{ name: '', url: '' }],
       reviewText: '',
       coverUrls: pub.coverUrls?.length ? pub.coverUrls : [''],
     });
@@ -229,7 +241,7 @@ const Admin: React.FC = () => {
     setSelectedId(null);
     setIsCanon(true);
     setReviewScore(4);
-    setFormData({ title: '', author: '', year: '', pubType: 'Novela', era: 'Alta República', isbn: '', publisher: '', collection: '', pages: '', description: '', buyLinks: '', reviewText: '', coverUrls: [''] });
+    setFormData({ title: '', author: '', year: '', pubType: 'Novela', era: 'Alta República', isbn: '', publisher: '', collection: '', pages: '', description: '', buyLinks: [{ name: '', url: '' }], videoLinks: [{ name: '', url: '' }], reviewText: '', coverUrls: [''] });
   };
 
   const handleSavePub = async () => {
@@ -250,6 +262,13 @@ const Admin: React.FC = () => {
       is_canon: isCanon,
       collection_id: collectionId,
       cover_urls: formData.coverUrls.filter(Boolean).length ? formData.coverUrls.filter(Boolean) : undefined,
+      buy_links: formData.buyLinks.some(l => l.name && l.url)
+        ? Object.fromEntries(formData.buyLinks.filter(l => l.name && l.url).map(l => [l.name, l.url]))
+        : undefined,
+      video_urls: formData.videoLinks.some(l => l.name && l.url)
+        ? Object.fromEntries(formData.videoLinks.filter(l => l.name && l.url).map(l => [l.name, l.url]))
+        : undefined,
+      pages: formData.pages ? parseInt(formData.pages) : undefined,
     };
     try {
       if (pubIsNew) {
@@ -277,7 +296,7 @@ const Admin: React.FC = () => {
         setPubs((prev) =>
           prev.map((p) =>
             p.id === selectedId
-              ? { ...p, title: updated.title, author: updated.author, pubType: updated.pub_type, year: updated.year ?? 0, kind: updated.is_canon ? 'canon' : 'legends', isbn: updated.isbn ?? '', publisher: updated.publisher ?? '', era: updated.era ?? '', description: updated.description ?? '', collectionId: updated.collection_id, coverUrls: updated.cover_urls ?? [] }
+              ? { ...p, title: updated.title, author: updated.author, pubType: updated.pub_type, year: updated.year ?? 0, kind: updated.is_canon ? 'canon' : 'legends', isbn: updated.isbn ?? '', publisher: updated.publisher ?? '', era: updated.era ?? '', description: updated.description ?? '', collectionId: updated.collection_id, coverUrls: updated.cover_urls ?? [], buy_links: updated.buy_links, video_urls: updated.video_urls, pages: updated.pages }
               : p
           )
         );
@@ -292,6 +311,34 @@ const Admin: React.FC = () => {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     setFormData((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const handleBuyLinkChange = (index: number, field: 'name' | 'url', value: string) => {
+    setFormData((prev) => {
+      const links = [...prev.buyLinks];
+      links[index] = { ...links[index], [field]: value };
+      return { ...prev, buyLinks: links };
+    });
+  };
+  const handleAddBuyLink = () => {
+    setFormData((prev) => ({ ...prev, buyLinks: [...prev.buyLinks, { name: '', url: '' }] }));
+  };
+  const handleRemoveBuyLink = (index: number) => {
+    setFormData((prev) => ({ ...prev, buyLinks: prev.buyLinks.filter((_, i) => i !== index) }));
+  };
+
+  const handleVideoLinkChange = (index: number, field: 'name' | 'url', value: string) => {
+    setFormData((prev) => {
+      const links = [...prev.videoLinks];
+      links[index] = { ...links[index], [field]: value };
+      return { ...prev, videoLinks: links };
+    });
+  };
+  const handleAddVideoLink = () => {
+    setFormData((prev) => ({ ...prev, videoLinks: [...prev.videoLinks, { name: '', url: '' }] }));
+  };
+  const handleRemoveVideoLink = (index: number) => {
+    setFormData((prev) => ({ ...prev, videoLinks: prev.videoLinks.filter((_, i) => i !== index) }));
   };
 
   const handleCoverUrlChange = (index: number, value: string) => {
@@ -1147,7 +1194,71 @@ const Admin: React.FC = () => {
             {/* Buy links */}
             <div style={{ marginBottom: 20 }}>
               <label style={labelStyle}>Links de compra</label>
-              <input style={{ ...inputStyle, marginBottom: 8 }} value={formData.buyLinks} onChange={handleInput('buyLinks')} placeholder="Amazon URL" />
+              {formData.buyLinks.map((link, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <input
+                    style={{ ...inputStyle, flex: '0 0 160px' }}
+                    placeholder="Nombre (ej: Amazon)"
+                    value={link.name}
+                    onChange={(e) => handleBuyLinkChange(i, 'name', e.target.value)}
+                  />
+                  <input
+                    style={{ ...inputStyle, flex: 1 }}
+                    placeholder="URL"
+                    value={link.url}
+                    onChange={(e) => handleBuyLinkChange(i, 'url', e.target.value)}
+                  />
+                  {formData.buyLinks.length > 1 && (
+                    <button
+                      onClick={() => handleRemoveBuyLink(i)}
+                      style={{ background: 'none', border: '1px solid rgba(194,85,85,0.3)', borderRadius: 6, color: '#C25555', fontSize: 18, width: 36, cursor: 'pointer', flexShrink: 0 }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={handleAddBuyLink}
+                style={{ background: 'none', border: '1px dashed rgba(201,168,76,0.3)', borderRadius: 6, color: '#C9A84C', fontFamily: "'DM Sans', sans-serif", fontSize: 13, padding: '6px 16px', cursor: 'pointer', marginTop: 4 }}
+              >
+                + Agregar link
+              </button>
+            </div>
+
+            {/* Video links */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={labelStyle}>Videos (YouTube)</label>
+              {formData.videoLinks.map((link, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <input
+                    style={{ ...inputStyle, flex: '0 0 200px' }}
+                    placeholder="Título del video"
+                    value={link.name}
+                    onChange={(e) => handleVideoLinkChange(i, 'name', e.target.value)}
+                  />
+                  <input
+                    style={{ ...inputStyle, flex: 1 }}
+                    placeholder="URL de YouTube"
+                    value={link.url}
+                    onChange={(e) => handleVideoLinkChange(i, 'url', e.target.value)}
+                  />
+                  {formData.videoLinks.length > 1 && (
+                    <button
+                      onClick={() => handleRemoveVideoLink(i)}
+                      style={{ background: 'none', border: '1px solid rgba(194,85,85,0.3)', borderRadius: 6, color: '#C25555', fontSize: 18, width: 36, cursor: 'pointer', flexShrink: 0 }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={handleAddVideoLink}
+                style={{ background: 'none', border: '1px dashed rgba(201,168,76,0.3)', borderRadius: 6, color: '#C9A84C', fontFamily: "'DM Sans', sans-serif", fontSize: 13, padding: '6px 16px', cursor: 'pointer', marginTop: 4 }}
+              >
+                + Agregar video
+              </button>
             </div>
 
             {/* Review */}
