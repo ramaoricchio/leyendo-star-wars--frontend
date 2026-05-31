@@ -27,8 +27,8 @@ export const getMe = async () => {
   return response.data.data;
 };
 
-export const register = async (username: string, email: string, password: string): Promise<void> => {
-  await api.post('/auth/register', { username, email, password });
+export const register = async (username: string, email: string, password: string, youtubeUsername?: string): Promise<void> => {
+  await api.post('/auth/register', { username, email, password, youtube_username: youtubeUsername || undefined });
 };
 
 export const verifyEmail = async (token: string): Promise<void> => {

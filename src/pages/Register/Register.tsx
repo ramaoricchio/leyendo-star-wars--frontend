@@ -8,6 +8,7 @@ const Register: React.FC = () => {
 
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
+  const [youtubeUsername, setYoutubeUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +28,7 @@ const Register: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      await register(username.trim(), email.trim(), password);
+      await register(username.trim(), email.trim(), password, youtubeUsername.trim() || undefined);
       setDone(true);
     } catch (err: unknown) {
       const msg =
@@ -200,6 +201,23 @@ const Register: React.FC = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="tu@email.com"
                   autoComplete="email"
+                  style={field}
+                  onFocus={(e) => (e.target.style.borderColor = 'rgba(201,168,76,0.5)')}
+                  onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.1)')}
+                />
+              </div>
+
+              <div>
+                <label style={label}>
+                  Usuario de YouTube{' '}
+                  <span style={{ color: '#5C5A52', fontStyle: 'normal' }}>(opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={youtubeUsername}
+                  onChange={(e) => setYoutubeUsername(e.target.value)}
+                  placeholder="@tucanal"
+                  autoComplete="off"
                   style={field}
                   onFocus={(e) => (e.target.style.borderColor = 'rgba(201,168,76,0.5)')}
                   onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.1)')}

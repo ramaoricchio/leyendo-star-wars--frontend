@@ -1,13 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import BookCover from '../../components/BookCover/BookCover';
 import Stars from '../../components/Stars/Stars';
 import RichTextEditor from '../../components/RichTextEditor/RichTextEditor';
-import { ToneKey } from '../../types/publication';
+import { ToneKey, PubType } from '../../types/publication';
 import { getCollections, createCollection, updateCollection } from '../../api/collections';
 import { getPublications, createPublication, updatePublication } from '../../api/publications';
 import { getReviews, createReview, updateReview } from '../../api/reviews';
+import { listUsers, updateUserRole, UsersPage } from '../../api/users';
+import { User } from '../../types/user';
+import {
+  downloadPubTemplate, parsePubExcel, PubImportRow,
+  downloadColTemplate, parseColExcel, ColImportRow,
+} from '../../utils/excelImport';
 
 type AdminTab = 'Publicaciones' | 'Colecciones' | 'Reseñas' | 'Usuarios';
 
@@ -61,6 +67,19 @@ const PUB_TYPE_DISPLAY: Record<string, string> = {
 
 const ERAS = ['Alta República', 'Antigua República', 'Amanecer Jedi', 'Caída de los Jedi', 'Reinado del Imperio', 'Era de la Rebelión', 'Nueva República', 'Ascenso de la Primera Orden'];
 const TONES: ToneKey[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+
+async function fetchAll<T>(
+  fetcher: (p: { page: number; per_page: number }) => Promise<{ items: T[]; total: number; pages: number }>
+): Promise<T[]> {
+  const PER_PAGE = 100;
+  const first = await fetcher({ page: 1, per_page: PER_PAGE });
+  const all = [...first.items];
+  for (let page = 2; page <= first.pages; page++) {
+    const r = await fetcher({ page, per_page: PER_PAGE });
+    all.push(...r.items);
+  }
+  return all;
+}
 
 const Admin: React.FC = () => {
   const { isAdmin, user } = useAuth();
@@ -127,6 +146,27 @@ const Admin: React.FC = () => {
     isActive: true,
   });
 
+  // — Importación publicaciones state —
+  const [pubImportState, setPubImportState] = useState<'idle' | 'preview' | 'loading' | 'done'>('idle');
+  const [pubImportRows, setPubImportRows] = useState<PubImportRow[]>([]);
+  const [pubImportProgress, setPubImportProgress] = useState({ done: 0, total: 0, errors: [] as string[] });
+  const pubFileInputRef = useRef<HTMLInputElement>(null);
+
+  // — Importación colecciones state —
+  const [colImportState, setColImportState] = useState<'idle' | 'preview' | 'loading' | 'done'>('idle');
+  const [colImportRows, setColImportRows] = useState<ColImportRow[]>([]);
+  const [colImportProgress, setColImportProgress] = useState({ done: 0, total: 0, errors: [] as string[] });
+  const colFileInputRef = useRef<HTMLInputElement>(null);
+
+  // — Usuarios state —
+  const [usersPage, setUsersPage] = useState<UsersPage | null>(null);
+  const [usersSearch, setUsersSearch] = useState('');
+  const [usersCurrentPage, setUsersCurrentPage] = useState(1);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersRoleChanging, setUsersRoleChanging] = useState<Record<number, boolean>>({});
+  const [usersRoleFeedback, setUsersRoleFeedback] = useState<Record<number, 'ok' | 'err'>>({});
+  const [usersSearchDebounce, setUsersSearchDebounce] = useState('');
+
   useEffect(() => {
     if (!isAdmin) {
       navigate('/');
@@ -134,8 +174,8 @@ const Admin: React.FC = () => {
   }, [isAdmin, navigate]);
 
   useEffect(() => {
-    getCollections({ per_page: 100 }).then((r) => {
-      const mapped: ColItem[] = r.items.map((c) => ({
+    fetchAll((p) => getCollections(p)).then((items) => {
+      const mapped: ColItem[] = items.map((c) => ({
         id: c.id,
         name: c.name,
         author: c.author ?? '',
@@ -156,8 +196,8 @@ const Admin: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    getPublications({ per_page: 100 }).then((r) => {
-      const mapped: PubItem[] = r.items.map((p) => ({
+    fetchAll((p) => getPublications(p)).then((items) => {
+      setPubs(items.map((p) => ({
         id: p.id,
         title: p.title,
         author: p.author,
@@ -174,14 +214,13 @@ const Admin: React.FC = () => {
         buy_links: p.buy_links,
         video_urls: p.video_urls,
         pages: p.pages,
-      }));
-      setPubs(mapped);
+      })));
     });
   }, []);
 
   useEffect(() => {
-    getReviews({ per_page: 100 }).then((r) => {
-      setRevs(r.items.map((rv) => ({
+    fetchAll((p) => getReviews(p)).then((items) => {
+      setRevs(items.map((rv) => ({
         id: rv.id,
         publicationId: rv.publication_id,
         score: rv.score,
@@ -193,6 +232,129 @@ const Admin: React.FC = () => {
       })));
     });
   }, []);
+
+  // Debounce search para usuarios
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setUsersSearchDebounce(usersSearch);
+      setUsersCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [usersSearch]);
+
+  // Fetch usuarios cuando cambia búsqueda o página
+  useEffect(() => {
+    if (activeTab !== 'Usuarios') return;
+    setUsersLoading(true);
+    listUsers(usersCurrentPage, 20, usersSearchDebounce || undefined)
+      .then(setUsersPage)
+      .finally(() => setUsersLoading(false));
+  }, [activeTab, usersCurrentPage, usersSearchDebounce]);
+
+  const handleRoleChange = async (u: User, newRole: string) => {
+    setUsersRoleChanging((prev) => ({ ...prev, [u.id]: true }));
+    try {
+      const updated = await updateUserRole(u.id, newRole);
+      setUsersPage((prev) =>
+        prev ? { ...prev, users: prev.users.map((x) => (x.id === updated.id ? updated : x)) } : prev
+      );
+      setUsersRoleFeedback((prev) => ({ ...prev, [u.id]: 'ok' }));
+    } catch {
+      setUsersRoleFeedback((prev) => ({ ...prev, [u.id]: 'err' }));
+    } finally {
+      setUsersRoleChanging((prev) => ({ ...prev, [u.id]: false }));
+      setTimeout(() => setUsersRoleFeedback((prev) => { const n = { ...prev }; delete n[u.id]; return n; }), 2000);
+    }
+  };
+
+  const handlePubFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const rows = await parsePubExcel(file);
+    setPubImportRows(rows);
+    setPubImportState('preview');
+  };
+
+  const runPubImport = async () => {
+    const valid = pubImportRows.filter((r) => r.valid);
+    setPubImportState('loading');
+    setPubImportProgress({ done: 0, total: valid.length, errors: [] });
+    const errors: string[] = [];
+    for (let i = 0; i < valid.length; i++) {
+      const row = valid[i];
+      try {
+        await createPublication({
+          title: row.titulo,
+          author: row.autor,
+          year: row.año ?? undefined,
+          pub_type: row.tipo as PubType,
+          era: row.era || undefined,
+          isbn: row.isbn || undefined,
+          publisher: row.editorial || undefined,
+          is_canon: row.canon,
+          pages: row.paginas ?? undefined,
+          description: row.descripcion || undefined,
+        });
+      } catch (err: unknown) {
+        const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'error desconocido';
+        errors.push(`Fila ${row._rowNum}: ${msg}`);
+      }
+      setPubImportProgress({ done: i + 1, total: valid.length, errors: [...errors] });
+    }
+    setPubImportState('done');
+    fetchAll((p) => getPublications(p)).then((items) => {
+      setPubs(items.map((p) => ({
+        id: p.id, title: p.title, author: p.author,
+        tone: TONES[p.id % TONES.length], kind: p.is_canon ? 'canon' : 'legends',
+        pubType: p.pub_type, year: p.year ?? 0, isbn: p.isbn ?? '',
+        publisher: p.publisher ?? '', era: p.era ?? '', description: p.description ?? '',
+        collectionId: p.collection_id, coverUrls: p.cover_urls ?? [],
+        buy_links: p.buy_links, video_urls: p.video_urls, pages: p.pages,
+      })));
+    });
+  };
+
+  const handleColFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const rows = await parseColExcel(file);
+    setColImportRows(rows);
+    setColImportState('preview');
+  };
+
+  const runColImport = async () => {
+    const valid = colImportRows.filter((r) => r.valid);
+    setColImportState('loading');
+    setColImportProgress({ done: 0, total: valid.length, errors: [] });
+    const errors: string[] = [];
+    for (let i = 0; i < valid.length; i++) {
+      const row = valid[i];
+      try {
+        await createCollection({
+          name: row.nombre,
+          author: row.autor || undefined,
+          era: row.era || undefined,
+          is_canon: row.canon,
+          description: row.descripcion || undefined,
+        });
+      } catch (err: unknown) {
+        const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'error desconocido';
+        errors.push(`Fila ${row._rowNum}: ${msg}`);
+      }
+      setColImportProgress({ done: i + 1, total: valid.length, errors: [...errors] });
+    }
+    setColImportState('done');
+    fetchAll((p) => getCollections(p)).then((items) => {
+      setCols(items.map((c) => ({
+        id: c.id, name: c.name, author: c.author ?? '', era: c.era ?? '',
+        kind: c.is_canon ? 'canon' : 'legends',
+        tone: (TONES.includes(c.cover_tone as ToneKey) ? c.cover_tone : 'A') as ToneKey,
+        count: 0, description: c.description ?? '',
+      })));
+    });
+  };
 
   if (!isAdmin) return null;
 
@@ -637,7 +799,7 @@ const Admin: React.FC = () => {
                 <button
                   onClick={handleNewCol}
                   style={{
-                    margin: 12,
+                    margin: '12px 12px 4px',
                     background: colIsNew ? 'rgba(201,168,76,0.15)' : 'linear-gradient(135deg, #C9A84C, #8E7635)',
                     border: colIsNew ? '1px solid rgba(201,168,76,0.4)' : 'none',
                     borderRadius: 6,
@@ -645,7 +807,7 @@ const Admin: React.FC = () => {
                     fontFamily: "'Oswald', sans-serif",
                     fontWeight: 600,
                     fontSize: 13,
-                    padding: 10,
+                    padding: '10px',
                     cursor: 'pointer',
                     letterSpacing: '0.08em',
                     textTransform: 'uppercase',
@@ -653,6 +815,17 @@ const Admin: React.FC = () => {
                 >
                   + Nueva colección
                 </button>
+                <div style={{ display: 'flex', gap: 6, margin: '0 12px 12px' }}>
+                  <button
+                    onClick={downloadColTemplate}
+                    style={{ flex: 1, background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#9C9788', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: '6px 0', cursor: 'pointer', letterSpacing: '0.06em' }}
+                  >↓ Plantilla</button>
+                  <button
+                    onClick={() => colFileInputRef.current?.click()}
+                    style={{ flex: 1, background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#9C9788', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: '6px 0', cursor: 'pointer', letterSpacing: '0.06em' }}
+                  >↑ Importar</button>
+                  <input ref={colFileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleColFileChange} />
+                </div>
                 <div style={{ flex: 1, overflowY: 'auto' }}>
                   {filteredCols.map((col) => {
                     const isActive = !colIsNew && selectedColId === col.id;
@@ -695,8 +868,81 @@ const Admin: React.FC = () => {
                 </div>
               </div>
 
+              {/* Panel de importación colecciones */}
+              {colImportState !== 'idle' && (() => {
+                const validCount = colImportRows.filter((r) => r.valid).length;
+                return (
+                  <div style={{ padding: '32px 40px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#C9A84C', letterSpacing: '0.3em', marginBottom: 8 }}>// IMPORTAR COLECCIONES</div>
+                        <h2 style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 24, textTransform: 'uppercase', color: '#F2EEDF', letterSpacing: '0.04em', margin: 0 }}>
+                          {colImportState === 'done'
+                            ? `${colImportProgress.done - colImportProgress.errors.length} importadas · ${colImportProgress.errors.length} errores`
+                            : `${colImportRows.length} filas · ${colImportRows.length - validCount} con errores`}
+                        </h2>
+                      </div>
+                      {colImportState === 'preview' && (
+                        <div style={{ display: 'flex', gap: 10 }}>
+                          <button onClick={() => setColImportState('idle')} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, color: '#9C9788', fontFamily: "'DM Sans', sans-serif", fontSize: 14, padding: '8px 20px', cursor: 'pointer' }}>Cancelar</button>
+                          <button onClick={runColImport} disabled={validCount === 0} style={{ background: validCount === 0 ? 'rgba(201,168,76,0.3)' : '#C9A84C', border: 'none', borderRadius: 6, color: '#0A0A0F', fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 13, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 20px', cursor: validCount === 0 ? 'not-allowed' : 'pointer' }}>
+                            Importar {validCount} colecciones →
+                          </button>
+                        </div>
+                      )}
+                      {colImportState === 'done' && (
+                        <button onClick={() => { setColImportState('idle'); setColImportRows([]); }} style={{ background: '#C9A84C', border: 'none', borderRadius: 6, color: '#0A0A0F', fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 13, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 20px', cursor: 'pointer' }}>Listo</button>
+                      )}
+                    </div>
+                    {colImportState === 'loading' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 4, height: 6, overflow: 'hidden' }}>
+                          <div style={{ background: '#C9A84C', height: '100%', width: `${(colImportProgress.done / colImportProgress.total) * 100}%`, transition: 'width 0.2s' }} />
+                        </div>
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#9C9788' }}>{colImportProgress.done} / {colImportProgress.total}</div>
+                      </div>
+                    )}
+                    {(colImportState === 'preview' || colImportState === 'done') && (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                              {['#', 'Nombre', 'Autor', 'Era', 'Canon', 'Estado'].map((h) => (
+                                <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#5C5A52', letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 400, whiteSpace: 'nowrap' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {colImportRows.map((row) => (
+                              <tr key={row._rowNum} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: row.valid ? 'transparent' : 'rgba(194,85,85,0.05)' }}>
+                                <td style={{ padding: '8px 12px', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#5C5A52' }}>{row._rowNum}</td>
+                                <td style={{ padding: '8px 12px', fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#F2EEDF', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.nombre || <span style={{ color: '#5C5A52' }}>—</span>}</td>
+                                <td style={{ padding: '8px 12px', fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#9C9788' }}>{row.autor || '—'}</td>
+                                <td style={{ padding: '8px 12px', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#5C5A52' }}>{row.era || '—'}</td>
+                                <td style={{ padding: '8px 12px', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: row.canon ? '#4B8FD9' : '#C25555' }}>{row.canon ? 'canon' : 'leyendas'}</td>
+                                <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                                  {row.valid
+                                    ? <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#4B8FD9' }}>✓</span>
+                                    : <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#C25555' }}>✗ {row.errors.join(', ')}</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    {colImportState === 'done' && colImportProgress.errors.length > 0 && (
+                      <div style={{ background: 'rgba(194,85,85,0.08)', border: '1px solid rgba(194,85,85,0.2)', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#C25555', letterSpacing: '0.1em', marginBottom: 4 }}>ERRORES DE IMPORTACIÓN</div>
+                        {colImportProgress.errors.map((e, i) => <div key={i} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#9C9788' }}>{e}</div>)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Editor colección */}
-              <div style={{ padding: '32px 40px', overflowY: 'auto' }}>
+              {colImportState === 'idle' && <div style={{ padding: '32px 40px', overflowY: 'auto' }}>
                 {/* Header editor */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
                   <div>
@@ -859,7 +1105,7 @@ const Admin: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              </div>
+              </div>}
             </>
           );
         })()}
@@ -895,7 +1141,7 @@ const Admin: React.FC = () => {
           <button
             onClick={handleNewPub}
             style={{
-              margin: 12,
+              margin: '12px 12px 4px',
               background: pubIsNew ? 'rgba(201,168,76,0.15)' : 'linear-gradient(135deg, #C9A84C, #8E7635)',
               border: pubIsNew ? '1px solid rgba(201,168,76,0.4)' : 'none',
               borderRadius: 6,
@@ -911,6 +1157,17 @@ const Admin: React.FC = () => {
           >
             + Nueva publicación
           </button>
+          <div style={{ display: 'flex', gap: 6, margin: '0 12px 12px' }}>
+            <button
+              onClick={downloadPubTemplate}
+              style={{ flex: 1, background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#9C9788', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: '6px 0', cursor: 'pointer', letterSpacing: '0.06em' }}
+            >↓ Plantilla</button>
+            <button
+              onClick={() => pubFileInputRef.current?.click()}
+              style={{ flex: 1, background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#9C9788', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: '6px 0', cursor: 'pointer', letterSpacing: '0.06em' }}
+            >↑ Importar</button>
+            <input ref={pubFileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handlePubFileChange} />
+          </div>
           {/* List */}
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {filtered.map((pub) => (
@@ -958,8 +1215,82 @@ const Admin: React.FC = () => {
           </div>
         </div>
 
+        {/* Panel de importación publicaciones */}
+        {pubImportState !== 'idle' && (() => {
+          const validCount = pubImportRows.filter((r) => r.valid).length;
+          return (
+            <div style={{ padding: '32px 40px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#C9A84C', letterSpacing: '0.3em', marginBottom: 8 }}>// IMPORTAR PUBLICACIONES</div>
+                  <h2 style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 24, textTransform: 'uppercase', color: '#F2EEDF', letterSpacing: '0.04em', margin: 0 }}>
+                    {pubImportState === 'done'
+                      ? `${pubImportProgress.done - pubImportProgress.errors.length} importadas · ${pubImportProgress.errors.length} errores`
+                      : `${pubImportRows.length} filas · ${pubImportRows.length - validCount} con errores`}
+                  </h2>
+                </div>
+                {pubImportState === 'preview' && (
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={() => setPubImportState('idle')} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, color: '#9C9788', fontFamily: "'DM Sans', sans-serif", fontSize: 14, padding: '8px 20px', cursor: 'pointer' }}>Cancelar</button>
+                    <button onClick={runPubImport} disabled={validCount === 0} style={{ background: validCount === 0 ? 'rgba(201,168,76,0.3)' : '#C9A84C', border: 'none', borderRadius: 6, color: '#0A0A0F', fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 13, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 20px', cursor: validCount === 0 ? 'not-allowed' : 'pointer' }}>
+                      Importar {validCount} publicaciones →
+                    </button>
+                  </div>
+                )}
+                {pubImportState === 'done' && (
+                  <button onClick={() => { setPubImportState('idle'); setPubImportRows([]); }} style={{ background: '#C9A84C', border: 'none', borderRadius: 6, color: '#0A0A0F', fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 13, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 20px', cursor: 'pointer' }}>Listo</button>
+                )}
+              </div>
+              {pubImportState === 'loading' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 4, height: 6, overflow: 'hidden' }}>
+                    <div style={{ background: '#C9A84C', height: '100%', width: `${(pubImportProgress.done / pubImportProgress.total) * 100}%`, transition: 'width 0.2s' }} />
+                  </div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#9C9788' }}>{pubImportProgress.done} / {pubImportProgress.total}</div>
+                </div>
+              )}
+              {(pubImportState === 'preview' || pubImportState === 'done') && (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                        {['#', 'Título', 'Autor', 'Año', 'Tipo', 'Canon', 'Estado'].map((h) => (
+                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#5C5A52', letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 400, whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pubImportRows.map((row) => (
+                        <tr key={row._rowNum} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: row.valid ? 'transparent' : 'rgba(194,85,85,0.05)' }}>
+                          <td style={{ padding: '8px 12px', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#5C5A52' }}>{row._rowNum}</td>
+                          <td style={{ padding: '8px 12px', fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#F2EEDF', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.titulo || <span style={{ color: '#5C5A52' }}>—</span>}</td>
+                          <td style={{ padding: '8px 12px', fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#9C9788', whiteSpace: 'nowrap' }}>{row.autor || '—'}</td>
+                          <td style={{ padding: '8px 12px', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#5C5A52' }}>{row.año ?? '—'}</td>
+                          <td style={{ padding: '8px 12px', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#5C5A52' }}>{row.tipo}</td>
+                          <td style={{ padding: '8px 12px', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: row.canon ? '#4B8FD9' : '#C25555' }}>{row.canon ? 'canon' : 'leyendas'}</td>
+                          <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                            {row.valid
+                              ? <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#4B8FD9' }}>✓</span>
+                              : <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#C25555' }}>✗ {row.errors.join(', ')}</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {pubImportState === 'done' && pubImportProgress.errors.length > 0 && (
+                <div style={{ background: 'rgba(194,85,85,0.08)', border: '1px solid rgba(194,85,85,0.2)', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#C25555', letterSpacing: '0.1em', marginBottom: 4 }}>ERRORES DE IMPORTACIÓN</div>
+                  {pubImportProgress.errors.map((e, i) => <div key={i} style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#9C9788' }}>{e}</div>)}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Editor */}
-        {(selectedPub || pubIsNew) && (
+        {pubImportState === 'idle' && (selectedPub || pubIsNew) && (
           <div style={{ padding: '32px 40px', overflowY: 'auto' }}>
             <div
               style={{
@@ -1538,15 +1869,259 @@ const Admin: React.FC = () => {
           );
         })()}
 
-        {/* ══ TAB: USUARIOS — placeholder ══ */}
-        {activeTab === 'Usuarios' && (
-          <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: '#5C5A52' }}>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 32 }}>◈</div>
-            <div style={{ fontFamily: "'Oswald', sans-serif", fontSize: 18, letterSpacing: '0.2em', textTransform: 'uppercase' }}>
-              Usuarios — próximamente
+        {/* ══ TAB: USUARIOS ══ */}
+        {activeTab === 'Usuarios' && (() => {
+          const formatDate = (iso: string | null) => {
+            if (!iso) return '—';
+            return new Date(iso).toLocaleDateString('es-AR', { year: 'numeric', month: 'short', day: 'numeric' });
+          };
+          const formatRelative = (iso: string | null) => {
+            if (!iso) return '—';
+            const diff = Date.now() - new Date(iso).getTime();
+            const days = Math.floor(diff / 86400000);
+            if (days === 0) return 'hoy';
+            if (days === 1) return 'ayer';
+            if (days < 30) return `hace ${days}d`;
+            if (days < 365) return `hace ${Math.floor(days / 30)}m`;
+            return `hace ${Math.floor(days / 365)}a`;
+          };
+          const totalPages = usersPage?.pages ?? 1;
+          const roleColors: Record<string, string> = {
+            admin: '#C9A84C',
+            miembro: '#4B8FD9',
+            lector: '#5C5A52',
+          };
+
+          return (
+            <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {/* Barra de búsqueda */}
+              <div style={{
+                padding: '16px 24px',
+                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 16,
+              }}>
+                <input
+                  type="text"
+                  value={usersSearch}
+                  onChange={(e) => setUsersSearch(e.target.value)}
+                  placeholder="Buscar por nombre o email..."
+                  style={{
+                    flex: 1,
+                    background: '#0A0A0F',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#F2EEDF',
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontSize: 14,
+                    padding: '10px 14px',
+                    outline: 'none',
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = 'rgba(201,168,76,0.4)')}
+                  onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.1)')}
+                />
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#5C5A52', whiteSpace: 'nowrap' }}>
+                  {usersPage ? `${usersPage.total} usuario${usersPage.total !== 1 ? 's' : ''}` : ''}
+                </span>
+              </div>
+
+              {/* Tabla */}
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                      {['Usuario', 'Email', 'YouTube', 'Rol', 'Email', 'Se unió', 'Último acceso'].map((h) => (
+                        <th key={h} style={{
+                          padding: '10px 16px',
+                          textAlign: 'left',
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 10,
+                          color: '#5C5A52',
+                          letterSpacing: '0.18em',
+                          textTransform: 'uppercase',
+                          fontWeight: 400,
+                          whiteSpace: 'nowrap',
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {usersLoading && (
+                      <tr>
+                        <td colSpan={7} style={{ padding: '40px 16px', textAlign: 'center', color: '#5C5A52', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>
+                          cargando...
+                        </td>
+                      </tr>
+                    )}
+                    {!usersLoading && usersPage && usersPage.users.length === 0 && (
+                      <tr>
+                        <td colSpan={7} style={{ padding: '40px 16px', textAlign: 'center', color: '#5C5A52', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>
+                          sin resultados
+                        </td>
+                      </tr>
+                    )}
+                    {!usersLoading && usersPage?.users.map((u) => {
+                      const feedback = usersRoleFeedback[u.id];
+                      const changing = usersRoleChanging[u.id];
+                      return (
+                        <tr
+                          key={u.id}
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          {/* Username */}
+                          <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: '#F2EEDF', fontWeight: 500 }}>
+                              {u.username}
+                            </span>
+                          </td>
+                          {/* Email */}
+                          <td style={{ padding: '12px 16px' }}>
+                            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#9C9788' }}>
+                              {u.email}
+                            </span>
+                          </td>
+                          {/* YouTube */}
+                          <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                            {u.youtube_username ? (
+                              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#C25555' }}>
+                                {u.youtube_username}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#3A3A42', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>—</span>
+                            )}
+                          </td>
+                          {/* Rol */}
+                          <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <select
+                                value={u.role}
+                                disabled={changing}
+                                onChange={(e) => handleRoleChange(u, e.target.value)}
+                                style={{
+                                  background: '#0A0A0F',
+                                  border: `1px solid ${feedback === 'ok' ? 'rgba(201,168,76,0.6)' : feedback === 'err' ? 'rgba(194,85,85,0.6)' : 'rgba(255,255,255,0.1)'}`,
+                                  color: roleColors[u.role] ?? '#F2EEDF',
+                                  fontFamily: "'JetBrains Mono', monospace",
+                                  fontSize: 11,
+                                  padding: '5px 8px',
+                                  cursor: changing ? 'wait' : 'pointer',
+                                  outline: 'none',
+                                  letterSpacing: '0.08em',
+                                  transition: 'border-color 0.3s',
+                                }}
+                              >
+                                <option value="lector">lector</option>
+                                <option value="miembro">miembro</option>
+                                <option value="admin">admin</option>
+                              </select>
+                            </div>
+                          </td>
+                          {/* Email verificado */}
+                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                            <span style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 13,
+                              color: u.email_verified ? '#4B8FD9' : '#5C5A52',
+                            }}>
+                              {u.email_verified ? '✓' : '✗'}
+                            </span>
+                          </td>
+                          {/* Se unió */}
+                          <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#5C5A52' }}>
+                              {formatDate(u.created_at)}
+                            </span>
+                          </td>
+                          {/* Último acceso */}
+                          <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#5C5A52' }}>
+                              {formatRelative(u.last_login_at)}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Paginación */}
+              {usersPage && totalPages > 1 && (
+                <div style={{
+                  padding: '14px 24px',
+                  borderTop: '1px solid rgba(255,255,255,0.05)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  justifyContent: 'center',
+                }}>
+                  <button
+                    onClick={() => setUsersCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={usersCurrentPage === 1}
+                    style={{
+                      background: 'none',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: usersCurrentPage === 1 ? '#3A3A42' : '#9C9788',
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 12,
+                      padding: '5px 12px',
+                      cursor: usersCurrentPage === 1 ? 'default' : 'pointer',
+                    }}
+                  >
+                    ←
+                  </button>
+                  {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                    let page: number;
+                    if (totalPages <= 7) {
+                      page = i + 1;
+                    } else if (usersCurrentPage <= 4) {
+                      page = i + 1;
+                    } else if (usersCurrentPage >= totalPages - 3) {
+                      page = totalPages - 6 + i;
+                    } else {
+                      page = usersCurrentPage - 3 + i;
+                    }
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setUsersCurrentPage(page)}
+                        style={{
+                          background: page === usersCurrentPage ? '#C9A84C' : 'none',
+                          border: `1px solid ${page === usersCurrentPage ? '#C9A84C' : 'rgba(255,255,255,0.1)'}`,
+                          color: page === usersCurrentPage ? '#0A0A0F' : '#9C9788',
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 12,
+                          padding: '5px 10px',
+                          cursor: 'pointer',
+                          minWidth: 32,
+                        }}
+                      >
+                        {page}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => setUsersCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={usersCurrentPage === totalPages}
+                    style={{
+                      background: 'none',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: usersCurrentPage === totalPages ? '#3A3A42' : '#9C9788',
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 12,
+                      padding: '5px 12px',
+                      cursor: usersCurrentPage === totalPages ? 'default' : 'pointer',
+                    }}
+                  >
+                    →
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
       </div>
     </div>
