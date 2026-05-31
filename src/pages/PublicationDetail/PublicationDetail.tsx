@@ -10,6 +10,9 @@ import { getPublication, getPublications } from '../../api/publications';
 import { getReviewsByPublication } from '../../api/reviews';
 import { Publication, ToneKey } from '../../types/publication';
 import { Review } from '../../types/review';
+import { useAuth } from '../../context/AuthContext';
+import { useReadingStatus } from '../../context/ReadingStatusContext';
+import { ReadingStatusValue } from '../../types/readingStatus';
 
 const extractYouTubeId = (url: string): string | null => {
   try {
@@ -29,6 +32,12 @@ const altTones = (id: number): ToneKey[] => [
   String.fromCharCode(65 + ((id + 5) % 8)) as ToneKey,
 ];
 
+const STATUS_OPTIONS: { value: ReadingStatusValue; label: string; icon: string }[] = [
+  { value: 'no_leido', label: 'No leído', icon: '○' },
+  { value: 'leyendo',  label: 'Leyendo',  icon: '◑' },
+  { value: 'leido',    label: 'Leído',    icon: '●' },
+];
+
 const PublicationDetail: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -36,6 +45,27 @@ const PublicationDetail: React.FC = () => {
   const [activeAlt, setActiveAlt] = useState(0);
   const [collectionBooks, setCollectionBooks] = useState<Publication[]>([]);
   const [review, setReview] = useState<Review | null>(null);
+  const [statusLoading, setStatusLoading] = useState(false);
+
+  const { isAuthenticated } = useAuth();
+  const { getStatus, updateStatus } = useReadingStatus();
+  const myStatus = getStatus(pubId);
+  const currentStatus: ReadingStatusValue = myStatus?.status ?? 'no_leido';
+  const inWishlist = myStatus?.in_wishlist ?? false;
+
+  const handleStatus = async (value: ReadingStatusValue) => {
+    if (statusLoading) return;
+    setStatusLoading(true);
+    await updateStatus(pubId, { status: value });
+    setStatusLoading(false);
+  };
+
+  const handleWishlist = async () => {
+    if (statusLoading) return;
+    setStatusLoading(true);
+    await updateStatus(pubId, { in_wishlist: !inWishlist });
+    setStatusLoading(false);
+  };
 
   const { data: pub, loading, error } = useApi(() => getPublication(pubId), [pubId]);
 
@@ -256,6 +286,87 @@ const PublicationDetail: React.FC = () => {
                     <span style={{ color: '#C9A84C', fontSize: 16 }}>→</span>
                   </a>
                 ))}
+              </div>
+            )}
+
+            {/* Mi estado */}
+            {isAuthenticated && (
+              <div
+                style={{
+                  background: '#14141C',
+                  border: '1px solid rgba(201,168,76,0.15)',
+                  borderRadius: 8,
+                  padding: 20,
+                  marginTop: 24,
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'Oswald', sans-serif",
+                    fontWeight: 500,
+                    fontSize: 13,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    color: '#9C9788',
+                    marginBottom: 12,
+                  }}
+                >
+                  Mi estado
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                  {STATUS_OPTIONS.map((opt) => {
+                    const active = currentStatus === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => handleStatus(opt.value)}
+                        style={{
+                          flex: 1,
+                          padding: '8px 4px',
+                          border: `1px solid ${active ? '#C9A84C' : 'rgba(242,238,223,0.12)'}`,
+                          borderRadius: 4,
+                          background: active ? 'rgba(201,168,76,0.15)' : 'transparent',
+                          color: active ? '#C9A84C' : '#9C9788',
+                          fontFamily: "'DM Sans', sans-serif",
+                          fontSize: 12,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 3,
+                          opacity: statusLoading ? 0.5 : 1,
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        <span style={{ fontSize: 14 }}>{opt.icon}</span>
+                        <span>{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={handleWishlist}
+                  style={{
+                    width: '100%',
+                    padding: '9px 0',
+                    border: `1px solid ${inWishlist ? '#C9A84C' : 'rgba(242,238,223,0.12)'}`,
+                    borderRadius: 4,
+                    background: inWishlist ? 'rgba(201,168,76,0.15)' : 'transparent',
+                    color: inWishlist ? '#C9A84C' : '#9C9788',
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    opacity: statusLoading ? 0.5 : 1,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <span>{inWishlist ? '♥' : '♡'}</span>
+                  {inWishlist ? 'En tu lista de deseos' : 'Agregar a lista de deseos'}
+                </button>
               </div>
             )}
           </div>

@@ -4,6 +4,7 @@ import TopNav from '../../components/Layout/TopNav';
 import Footer from '../../components/Layout/Footer';
 import Starfield from '../../components/Starfield/Starfield';
 import BookCover from '../../components/BookCover/BookCover';
+import ReadingStatusOverlay from '../../components/ReadingStatusOverlay/ReadingStatusOverlay';
 import { ToneKey, Publication } from '../../types/publication';
 import { getPublications } from '../../api/publications';
 
@@ -435,15 +436,17 @@ const Timeline: React.FC = () => {
                   style={{ cursor: 'pointer' }}
                   title={pub.title}
                 >
-                  <BookCover
-                    title={pub.title}
-                    author={pub.author}
-                    tone={deriveTone(pub.id)}
-                    kind={pub.is_canon ? 'canon' : 'legends'}
-                    w={130}
-                    ratio={1.5}
-                    imageUrl={pub.cover_urls?.[0] || undefined}
-                  />
+                  <ReadingStatusOverlay publicationId={pub.id}>
+                    <BookCover
+                      title={pub.title}
+                      author={pub.author}
+                      tone={deriveTone(pub.id)}
+                      kind={pub.is_canon ? 'canon' : 'legends'}
+                      w={130}
+                      ratio={1.5}
+                      imageUrl={pub.cover_urls?.[0] || undefined}
+                    />
+                  </ReadingStatusOverlay>
                 </div>
               ))
             )}

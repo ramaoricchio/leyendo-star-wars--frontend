@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { trackPageView } from './analytics';
 import { AuthProvider } from './context/AuthContext';
 import { LoadingProvider } from './context/LoadingContext';
+import { ReadingStatusProvider } from './context/ReadingStatusContext';
 import Home from './pages/Home/Home';
 import Timeline from './pages/Timeline/Timeline';
 import ByYear from './pages/ByYear/ByYear';
@@ -30,6 +31,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <ReadingStatusProvider>
         <LoadingProvider>
           <RouteTracker />
           <Routes>
@@ -49,6 +51,7 @@ function App() {
             <Route path="/perfil" element={<UserProfile />} />
           </Routes>
         </LoadingProvider>
+        </ReadingStatusProvider>
       </AuthProvider>
     </BrowserRouter>
   );
