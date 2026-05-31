@@ -6,6 +6,8 @@ export interface Collection {
   is_canon: boolean;
   author?: string;
   cover_tone?: string;
+  featured_pub_ids?: number[];
+  featured_cover_urls?: string[];
   publications?: import('./publication').Publication[];
   created_at: string;
   updated_at: string;

@@ -1,6 +1,17 @@
 import api from './axios';
 import { Collection } from '../types/collection';
 
+interface CollectionPayload {
+  name?: string;
+  description?: string;
+  era?: string;
+  is_canon?: boolean;
+  author?: string;
+  cover_tone?: string;
+  featured_pub_ids?: number[];
+  publication_ids?: number[];
+}
+
 export const getCollections = async (params?: {
   page?: number;
   per_page?: number;
@@ -15,12 +26,12 @@ export const getCollection = async (id: number): Promise<Collection> => {
   return response.data.data;
 };
 
-export const createCollection = async (data: Partial<Collection>): Promise<Collection> => {
+export const createCollection = async (data: CollectionPayload): Promise<Collection> => {
   const response = await api.post('/collections', data);
   return response.data.data;
 };
 
-export const updateCollection = async (id: number, data: Partial<Collection>): Promise<Collection> => {
+export const updateCollection = async (id: number, data: CollectionPayload): Promise<Collection> => {
   const response = await api.put(`/collections/${id}`, data);
   return response.data.data;
 };

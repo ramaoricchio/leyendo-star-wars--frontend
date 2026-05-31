@@ -2,7 +2,7 @@ export interface Review {
   id: number;
   publication_id: number;
   publication?: import('./publication').Publication;
-  score: number;  // 1-5
+  score: number | null;  // 1-5, o null = sin puntaje
   text: string;
   excerpt?: string;
   date: string;

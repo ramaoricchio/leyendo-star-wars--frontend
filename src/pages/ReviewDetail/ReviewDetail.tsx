@@ -142,9 +142,9 @@ const ReviewDetail: React.FC = () => {
                     marginBottom: 8,
                   }}
                 >
-                  {review.score}
+                  {review.score ?? 'N/A'}
                 </div>
-                <Stars value={review.score} size={18} />
+                {review.score !== null && <Stars value={review.score ?? 0} size={18} />}
                 <div
                   style={{
                     fontFamily: "'JetBrains Mono', monospace",

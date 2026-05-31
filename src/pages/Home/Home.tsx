@@ -445,7 +445,7 @@ const Home: React.FC = () => {
                     >
                       {pub.author}
                     </div>
-                    <Stars value={review.score} />
+                    {review.score !== null && <Stars value={review.score ?? 0} />}
                     {review.excerpt && (
                       <p
                         style={{

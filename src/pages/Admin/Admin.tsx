@@ -5,7 +5,7 @@ import BookCover from '../../components/BookCover/BookCover';
 import Stars from '../../components/Stars/Stars';
 import RichTextEditor from '../../components/RichTextEditor/RichTextEditor';
 import { ToneKey, PubType } from '../../types/publication';
-import { getCollections, createCollection, updateCollection } from '../../api/collections';
+import { getCollections, getCollection, createCollection, updateCollection } from '../../api/collections';
 import { getPublications, createPublication, updatePublication } from '../../api/publications';
 import { getReviews, createReview, updateReview } from '../../api/reviews';
 import { listUsers, updateUserRole, UsersPage } from '../../api/users';
@@ -29,7 +29,6 @@ interface PubItem {
   publisher: string;
   era: string;
   description: string;
-  collectionId?: number;
   coverUrls?: string[];
   buy_links?: Record<string, string>;
   video_urls?: Record<string, string>;
@@ -50,7 +49,7 @@ interface ColItem {
 interface RevItem {
   id: number;
   publicationId: number;
-  score: number;
+  score: number | null;
   text: string;
   excerpt: string;
   date: string;
@@ -94,7 +93,7 @@ const Admin: React.FC = () => {
   const [pubError, setPubError] = useState('');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [reviewScore, setReviewScore] = useState(4);
+  const [reviewScore, setReviewScore] = useState<number | null>(null);
   const [isCanon, setIsCanon] = useState(true);
   const [formData, setFormData] = useState({
     title: '',
@@ -104,7 +103,6 @@ const Admin: React.FC = () => {
     era: 'Alta República',
     isbn: '',
     publisher: '',
-    collection: '',
     pages: '',
     description: '',
     buyLinks: [{ name: '', url: '' }] as { name: string; url: string }[],
@@ -128,6 +126,9 @@ const Admin: React.FC = () => {
     description: '',
     tone: 'A' as ToneKey,
   });
+  const [colPubSearch, setColPubSearch] = useState('');
+  const [colPubIds, setColPubIds] = useState<number[]>([]);
+  const [colFeaturedPubIds, setColFeaturedPubIds] = useState<number[]>([]);
 
   // — Reseñas state —
   const [revs, setRevs] = useState<RevItem[]>([]);
@@ -138,7 +139,7 @@ const Admin: React.FC = () => {
   const [selectedRevId, setSelectedRevId] = useState<number | null>(null);
   const [revForm, setRevForm] = useState({
     publicationId: 0,
-    score: 4,
+    score: null as number | null,
     text: '',
     excerpt: '',
     date: new Date().toISOString().split('T')[0],
@@ -191,6 +192,8 @@ const Admin: React.FC = () => {
         setSelectedColId(first.id);
         setColIsCanon(first.kind === 'canon');
         setColForm({ name: first.name, author: first.author, era: first.era, description: first.description, tone: first.tone });
+      } else if (mapped.length === 0) {
+        setColIsNew(true);
       }
     });
   }, []);
@@ -209,7 +212,6 @@ const Admin: React.FC = () => {
         publisher: p.publisher ?? '',
         era: p.era ?? '',
         description: p.description ?? '',
-        collectionId: p.collection_id,
         coverUrls: p.cover_urls ?? [],
         buy_links: p.buy_links,
         video_urls: p.video_urls,
@@ -223,7 +225,7 @@ const Admin: React.FC = () => {
       setRevs(items.map((rv) => ({
         id: rv.id,
         publicationId: rv.publication_id,
-        score: rv.score,
+        score: rv.score ?? null,
         text: rv.text,
         excerpt: rv.excerpt ?? '',
         date: rv.date,
@@ -309,7 +311,7 @@ const Admin: React.FC = () => {
         tone: TONES[p.id % TONES.length], kind: p.is_canon ? 'canon' : 'legends',
         pubType: p.pub_type, year: p.year ?? 0, isbn: p.isbn ?? '',
         publisher: p.publisher ?? '', era: p.era ?? '', description: p.description ?? '',
-        collectionId: p.collection_id, coverUrls: p.cover_urls ?? [],
+        coverUrls: p.cover_urls ?? [],
         buy_links: p.buy_links, video_urls: p.video_urls, pages: p.pages,
       })));
     });
@@ -372,8 +374,8 @@ const Admin: React.FC = () => {
     setPubError('');
     setSelectedId(pub.id);
     setIsCanon(pub.kind === 'canon');
-    setReviewScore(4);
-    const colName = cols.find((c) => c.id === pub.collectionId)?.name ?? '';
+    const existingRev = revs.find((r) => r.publicationId === pub.id);
+    setReviewScore(existingRev?.score ?? null);
     setFormData({
       title: pub.title,
       author: pub.author,
@@ -382,7 +384,6 @@ const Admin: React.FC = () => {
       era: pub.era || 'Alta República',
       isbn: pub.isbn,
       publisher: pub.publisher,
-      collection: colName,
       pages: '',
       description: pub.description,
       buyLinks: pub.buy_links && Object.keys(pub.buy_links).length
@@ -391,7 +392,7 @@ const Admin: React.FC = () => {
       videoLinks: pub.video_urls && Object.keys(pub.video_urls).length
         ? Object.entries(pub.video_urls).map(([name, url]) => ({ name, url }))
         : [{ name: '', url: '' }],
-      reviewText: '',
+      reviewText: existingRev?.text ?? '',
       coverUrls: pub.coverUrls?.length ? pub.coverUrls : [''],
     });
   };
@@ -403,7 +404,7 @@ const Admin: React.FC = () => {
     setSelectedId(null);
     setIsCanon(true);
     setReviewScore(4);
-    setFormData({ title: '', author: '', year: '', pubType: 'Novela', era: 'Alta República', isbn: '', publisher: '', collection: '', pages: '', description: '', buyLinks: [{ name: '', url: '' }], videoLinks: [{ name: '', url: '' }], reviewText: '', coverUrls: [''] });
+    setFormData({ title: '', author: '', year: '', pubType: 'Novela', era: 'Alta República', isbn: '', publisher: '', pages: '', description: '', buyLinks: [{ name: '', url: '' }], videoLinks: [{ name: '', url: '' }], reviewText: '', coverUrls: [''] });
   };
 
   const handleSavePub = async () => {
@@ -411,7 +412,6 @@ const Admin: React.FC = () => {
     const pubTypeMap: Record<string, string> = {
       'Novela': 'novela', 'Cómic': 'comic', 'Antología': 'antologia', 'Audiolibro': 'audiolibro',
     };
-    const collectionId = cols.find((c) => c.name === formData.collection)?.id;
     const payload = {
       title: formData.title,
       author: formData.author,
@@ -422,7 +422,6 @@ const Admin: React.FC = () => {
       description: formData.description || undefined,
       era: formData.era,
       is_canon: isCanon,
-      collection_id: collectionId,
       cover_urls: formData.coverUrls.filter(Boolean).length ? formData.coverUrls.filter(Boolean) : undefined,
       buy_links: formData.buyLinks.some(l => l.name && l.url)
         ? Object.fromEntries(formData.buyLinks.filter(l => l.name && l.url).map(l => [l.name, l.url]))
@@ -433,6 +432,7 @@ const Admin: React.FC = () => {
       pages: formData.pages ? parseInt(formData.pages) : undefined,
     };
     try {
+      let savedPubId = selectedId!;
       if (pubIsNew) {
         const created = await createPublication(payload);
         const newItem: PubItem = {
@@ -447,22 +447,56 @@ const Admin: React.FC = () => {
           publisher: created.publisher ?? '',
           era: created.era ?? '',
           description: created.description ?? '',
-          collectionId: created.collection_id,
           coverUrls: created.cover_urls ?? [],
         };
         setPubs((prev) => [...prev, newItem]);
         setPubIsNew(false);
+        savedPubId = created.id;
         setSelectedId(created.id);
       } else {
         const updated = await updatePublication(selectedId!, payload);
         setPubs((prev) =>
           prev.map((p) =>
             p.id === selectedId
-              ? { ...p, title: updated.title, author: updated.author, pubType: updated.pub_type, year: updated.year ?? 0, kind: updated.is_canon ? 'canon' : 'legends', isbn: updated.isbn ?? '', publisher: updated.publisher ?? '', era: updated.era ?? '', description: updated.description ?? '', collectionId: updated.collection_id, coverUrls: updated.cover_urls ?? [], buy_links: updated.buy_links, video_urls: updated.video_urls, pages: updated.pages }
+              ? { ...p, title: updated.title, author: updated.author, pubType: updated.pub_type, year: updated.year ?? 0, kind: updated.is_canon ? 'canon' : 'legends', isbn: updated.isbn ?? '', publisher: updated.publisher ?? '', era: updated.era ?? '', description: updated.description ?? '', coverUrls: updated.cover_urls ?? [], buy_links: updated.buy_links, video_urls: updated.video_urls, pages: updated.pages }
               : p
           )
         );
       }
+
+      // Crear o actualizar reseña si hay texto
+      if (formData.reviewText.trim()) {
+        const autoExcerpt = stripHtml(formData.reviewText).slice(0, 200).trimEnd() + '…';
+        const revPayload = {
+          publication_id: savedPubId,
+          score: reviewScore,
+          text: formData.reviewText,
+          excerpt: autoExcerpt,
+          date: new Date().toISOString().split('T')[0],
+          is_active: true,
+        };
+        const existingRev = revs.find((r) => r.publicationId === savedPubId);
+        if (existingRev) {
+          const updated = await updateReview(existingRev.id, revPayload);
+          setRevs((prev) => prev.map((r) => r.id === existingRev.id
+            ? { ...r, score: updated.score ?? null, text: updated.text, excerpt: updated.excerpt ?? '', date: updated.date, youtubeUrl: updated.youtube_url ?? '', isActive: updated.is_active ?? true }
+            : r
+          ));
+        } else {
+          const created = await createReview(revPayload);
+          setRevs((prev) => [...prev, {
+            id: created.id,
+            publicationId: created.publication_id,
+            score: created.score ?? null,
+            text: created.text,
+            excerpt: created.excerpt ?? '',
+            date: created.date,
+            youtubeUrl: created.youtube_url ?? '',
+            isActive: created.is_active ?? true,
+          }]);
+        }
+      }
+
       setPubSaved(true);
     } catch {
       setPubError('No se pudo guardar. Verificá que el backend esté corriendo y que hayas iniciado sesión como admin.');
@@ -532,7 +566,7 @@ const Admin: React.FC = () => {
     setRevSaved(false);
     setRevError('');
     setSelectedRevId(rv.id);
-    setRevForm({ publicationId: rv.publicationId, score: rv.score, text: rv.text, excerpt: rv.excerpt, date: rv.date, youtubeUrl: rv.youtubeUrl, isActive: rv.isActive });
+    setRevForm({ publicationId: rv.publicationId, score: rv.score ?? null, text: rv.text, excerpt: rv.excerpt, date: rv.date, youtubeUrl: rv.youtubeUrl, isActive: rv.isActive });
   };
 
   const handleNewRev = () => {
@@ -542,7 +576,7 @@ const Admin: React.FC = () => {
     setRevSaved(false);
     setRevError('');
     setSelectedRevId(null);
-    setRevForm({ publicationId: firstAvailable?.id ?? 0, score: 4, text: '', excerpt: '', date: new Date().toISOString().split('T')[0], youtubeUrl: '', isActive: true });
+    setRevForm({ publicationId: firstAvailable?.id ?? 0, score: null, text: '', excerpt: '', date: new Date().toISOString().split('T')[0], youtubeUrl: '', isActive: true });
   };
 
   const stripHtml = (html: string) => {
@@ -727,22 +761,31 @@ const Admin: React.FC = () => {
             setColIsNew(false);
             setColSaved(false);
             setColError('');
+            setColPubSearch('');
             setSelectedColId(col.id);
             setColIsCanon(col.kind === 'canon');
             setColForm({ name: col.name, author: col.author, era: col.era, description: col.description, tone: col.tone });
+            getCollection(col.id).then((detail) => {
+              setColPubIds((detail.publications ?? []).map((p) => p.id));
+              setColFeaturedPubIds(detail.featured_pub_ids ?? []);
+            });
           };
 
           const handleNewCol = () => {
             setColIsNew(true);
             setColSaved(false);
             setColError('');
+            setColPubSearch('');
             setSelectedColId(null);
             setColIsCanon(true);
+            setColPubIds([]);
+            setColFeaturedPubIds([]);
             setColForm({ name: '', author: '', era: 'Alta República', description: '', tone: 'A' });
           };
 
           const handleSave = async () => {
             setColError('');
+            if (!colIsNew && selectedColId === null) return;
             const payload = {
               name: colForm.name,
               author: colForm.author,
@@ -750,6 +793,8 @@ const Admin: React.FC = () => {
               description: colForm.description,
               is_canon: colIsCanon,
               cover_tone: colForm.tone,
+              publication_ids: colPubIds,
+              featured_pub_ids: colFeaturedPubIds,
             };
             try {
               if (colIsNew) {
@@ -778,8 +823,14 @@ const Admin: React.FC = () => {
                 );
               }
               setColSaved(true);
-            } catch {
-              setColError('No se pudo guardar. Verificá que el backend esté corriendo y que hayas iniciado sesión como admin.');
+            } catch (err: unknown) {
+              const apiMsg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+              const status = (err as { response?: { status?: number } })?.response?.status;
+              if (status === 401 || status === 403) {
+                setColError(`Error ${status}: sesión inválida o sin permisos. Cerrá sesión y volvé a entrar.`);
+              } else {
+                setColError(apiMsg || 'No se pudo guardar. Verificá que el backend esté corriendo y que hayas iniciado sesión como admin.');
+              }
             }
           };
 
@@ -1063,6 +1114,128 @@ const Admin: React.FC = () => {
                   />
                 </div>
 
+                {/* Publicaciones */}
+                {(() => {
+                  const colPubsInCol = pubs.filter((p) => colPubIds.includes(p.id));
+                  const searchLower = colPubSearch.toLowerCase();
+                  const searchResults = colPubSearch.length > 1
+                    ? pubs.filter((p) => !colPubIds.includes(p.id) && (p.title.toLowerCase().includes(searchLower) || p.author.toLowerCase().includes(searchLower))).slice(0, 8)
+                    : [];
+
+                  const toggleFeatured = (pubId: number) => {
+                    setColFeaturedPubIds((prev) => {
+                      if (prev.includes(pubId)) return prev.filter((id) => id !== pubId);
+                      if (prev.length >= 3) return prev;
+                      return [...prev, pubId];
+                    });
+                  };
+
+                  const removePub = (pubId: number) => {
+                    setColPubIds((prev) => prev.filter((id) => id !== pubId));
+                    setColFeaturedPubIds((prev) => prev.filter((id) => id !== pubId));
+                  };
+
+                  const addPub = (pubId: number) => {
+                    setColPubIds((prev) => [...prev, pubId]);
+                    setColPubSearch('');
+                  };
+
+                  return (
+                    <div style={{ marginBottom: 28 }}>
+                      <label style={labelStyle}>Publicaciones en esta colección ({colPubsInCol.length})</label>
+
+                      {/* Buscador para agregar */}
+                      <div style={{ position: 'relative', marginBottom: 12 }}>
+                        <input
+                          style={{ ...inputStyle, fontSize: 13 }}
+                          placeholder="Buscar publicación para agregar..."
+                          value={colPubSearch}
+                          onChange={(e) => setColPubSearch(e.target.value)}
+                        />
+                        {searchResults.length > 0 && (
+                          <div style={{
+                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
+                            background: '#1C1C26', border: '1px solid rgba(201,168,76,0.2)',
+                            borderTop: 'none', maxHeight: 280, overflowY: 'auto',
+                          }}>
+                            {searchResults.map((p) => (
+                              <div
+                                key={p.id}
+                                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+                                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(201,168,76,0.06)')}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                              >
+                                <BookCover title={p.title} tone={p.tone} kind={p.kind} w={28} ratio={1.5} badge={false} imageUrl={p.coverUrls?.[0]} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#F2EEDF', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{p.title}</div>
+                                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#5C5A52' }}>{p.author} · {p.year}</div>
+                                </div>
+                                <button
+                                  onClick={() => addPub(p.id)}
+                                  style={{ background: 'rgba(201,168,76,0.15)', border: '1px solid rgba(201,168,76,0.3)', borderRadius: 4, color: '#C9A84C', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                >
+                                  + Agregar
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Lista de publicaciones en la colección */}
+                      {colPubsInCol.length === 0 ? (
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#3A3A42', padding: '12px 0' }}>Sin publicaciones aún</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 320, overflowY: 'auto' }}>
+                          {colPubsInCol.map((p) => {
+                            const isFeatured = colFeaturedPubIds.includes(p.id);
+                            const canFeature = isFeatured || colFeaturedPubIds.length < 3;
+                            return (
+                              <div key={p.id} style={{
+                                display: 'flex', alignItems: 'center', gap: 10,
+                                padding: '8px 12px',
+                                background: isFeatured ? 'rgba(201,168,76,0.05)' : 'rgba(255,255,255,0.02)',
+                                border: `1px solid ${isFeatured ? 'rgba(201,168,76,0.2)' : 'rgba(255,255,255,0.05)'}`,
+                                borderRadius: 6,
+                              }}>
+                                <BookCover title={p.title} tone={p.tone} kind={p.kind} w={28} ratio={1.5} badge={false} imageUrl={p.coverUrls?.[0]} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#F2EEDF', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{p.title}</div>
+                                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#5C5A52' }}>{p.author} · {p.year}</div>
+                                </div>
+                                <button
+                                  onClick={() => toggleFeatured(p.id)}
+                                  title={isFeatured ? 'Quitar de portada' : canFeature ? 'Destacar en portada' : 'Máx. 3 destacados'}
+                                  style={{
+                                    background: isFeatured ? 'rgba(201,168,76,0.15)' : 'rgba(255,255,255,0.04)',
+                                    border: `1px solid ${isFeatured ? 'rgba(201,168,76,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                                    borderRadius: 4, color: isFeatured ? '#C9A84C' : '#5C5A52',
+                                    fontSize: 14, width: 30, height: 28, cursor: canFeature ? 'pointer' : 'not-allowed',
+                                    opacity: !canFeature && !isFeatured ? 0.4 : 1,
+                                  }}
+                                >
+                                  ★
+                                </button>
+                                <button
+                                  onClick={() => removePub(p.id)}
+                                  style={{ background: 'none', border: '1px solid rgba(194,85,85,0.2)', borderRadius: 4, color: '#C25555', fontSize: 16, width: 28, height: 28, cursor: 'pointer' }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {colFeaturedPubIds.length > 0 && (
+                        <div style={{ marginTop: 8, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#C9A84C', letterSpacing: '0.08em' }}>
+                          ★ {colFeaturedPubIds.length}/3 destacadas — aparecen en la portada de la tarjeta
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Preview */}
                 <div>
                   <label style={labelStyle}>Preview de tarjeta</label>
@@ -1072,15 +1245,25 @@ const Admin: React.FC = () => {
                     width: 240, overflow: 'hidden',
                   }}>
                     <div style={{ position: 'relative', height: 160, background: '#0A0A0F', overflow: 'hidden' }}>
-                      <div style={{ position: 'absolute', left: 20, top: 20, transform: 'rotate(-8deg)' }}>
-                        <BookCover title={colForm.name || 'Colección'} tone={colForm.tone} kind={colIsCanon ? 'canon' : 'legends'} w={70} badge={false} />
-                      </div>
-                      <div style={{ position: 'absolute', left: 80, top: 16, zIndex: 2 }}>
-                        <BookCover title={(colForm.name || 'Colección') + ' II'} tone={TONES[(TONES.indexOf(colForm.tone) + 2) % TONES.length]} kind={colIsCanon ? 'canon' : 'legends'} w={78} badge={false} />
-                      </div>
-                      <div style={{ position: 'absolute', left: 150, top: 24, transform: 'rotate(8deg)' }}>
-                        <BookCover title={(colForm.name || 'Colección') + ' III'} tone={TONES[(TONES.indexOf(colForm.tone) + 4) % TONES.length]} kind={colIsCanon ? 'canon' : 'legends'} w={70} badge={false} />
-                      </div>
+                      {[
+                        { left: 20, top: 20, rotate: '-8deg', w: 70, offset: 0 },
+                        { left: 80, top: 16, rotate: '0deg', w: 78, offset: 2 },
+                        { left: 150, top: 24, rotate: '8deg', w: 70, offset: 4 },
+                      ].map((slot, i) => {
+                        const featuredPub = colFeaturedPubIds[i] != null ? pubs.find((p) => p.id === colFeaturedPubIds[i]) : undefined;
+                        return (
+                          <div key={i} style={{ position: 'absolute', left: slot.left, top: slot.top, transform: `rotate(${slot.rotate})`, zIndex: i === 1 ? 2 : 1 }}>
+                            <BookCover
+                              title={featuredPub?.title || colForm.name || 'Colección'}
+                              tone={TONES[(TONES.indexOf(colForm.tone) + slot.offset) % TONES.length]}
+                              kind={colIsCanon ? 'canon' : 'legends'}
+                              w={slot.w}
+                              badge={false}
+                              imageUrl={featuredPub?.coverUrls?.[0]}
+                            />
+                          </div>
+                        );
+                      })}
                       <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 50%, #14141C 100%)' }} />
                     </div>
                     <div style={{ padding: '14px 16px' }}>
@@ -1441,16 +1624,6 @@ const Admin: React.FC = () => {
                 <label style={labelStyle}>Editorial</label>
                 <input style={inputStyle} value={formData.publisher} onChange={handleInput('publisher')} />
               </div>
-              {/* Colección */}
-              <div>
-                <label style={labelStyle}>Colección</label>
-                <select style={inputStyle} value={formData.collection} onChange={handleInput('collection')}>
-                  <option value="" style={{ background: '#1C1C26' }}>Sin colección</option>
-                  {cols.map((c) => (
-                    <option key={c.id} value={c.name} style={{ background: '#1C1C26' }}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
               {/* Páginas */}
               <div>
                 <label style={labelStyle}>Páginas</label>
@@ -1594,11 +1767,10 @@ const Admin: React.FC = () => {
 
             {/* Review */}
             <div style={{ marginBottom: 20 }}>
-              <label style={labelStyle}>Reseña (Markdown)</label>
-              <textarea
-                style={{ ...inputStyle, minHeight: 120, resize: 'vertical', fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}
+              <label style={labelStyle}>Reseña</label>
+              <RichTextEditor
                 value={formData.reviewText}
-                onChange={handleInput('reviewText')}
+                onChange={(html) => setFormData((prev) => ({ ...prev, reviewText: html }))}
               />
             </div>
 
@@ -1606,20 +1778,41 @@ const Admin: React.FC = () => {
             <div>
               <label style={labelStyle}>Puntaje</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Stars value={reviewScore} size={24} />
+                {reviewScore !== null
+                  ? <Stars value={reviewScore} size={24} />
+                  : <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: '#5C5A52', letterSpacing: '0.06em' }}>SIN PUNTAJE</span>
+                }
                 <span style={{ fontFamily: "'Oswald', sans-serif", fontSize: 28, color: '#C9A84C', fontWeight: 600 }}>
-                  {reviewScore}/5
+                  {reviewScore !== null ? `${reviewScore}/5` : 'N/A'}
                 </span>
                 <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    onClick={() => setReviewScore(null)}
+                    style={{
+                      background: reviewScore === null ? 'rgba(201,168,76,0.15)' : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${reviewScore === null ? 'rgba(201,168,76,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                      borderRadius: 4,
+                      color: reviewScore === null ? '#C9A84C' : '#5C5A52',
+                      fontFamily: "'Oswald', sans-serif",
+                      fontSize: 11,
+                      width: 40,
+                      height: 32,
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    N/A
+                  </button>
                   {[1, 2, 3, 4, 5].map((s) => (
                     <button
                       key={s}
                       onClick={() => setReviewScore(s)}
                       style={{
-                        background: reviewScore >= s ? 'rgba(201,168,76,0.15)' : 'rgba(255,255,255,0.04)',
-                        border: `1px solid ${reviewScore >= s ? 'rgba(201,168,76,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                        background: reviewScore !== null && reviewScore >= s ? 'rgba(201,168,76,0.15)' : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${reviewScore !== null && reviewScore >= s ? 'rgba(201,168,76,0.4)' : 'rgba(255,255,255,0.1)'}`,
                         borderRadius: 4,
-                        color: reviewScore >= s ? '#C9A84C' : '#5C5A52',
+                        color: reviewScore !== null && reviewScore >= s ? '#C9A84C' : '#5C5A52',
                         fontFamily: "'Oswald', sans-serif",
                         fontSize: 13,
                         width: 32,
@@ -1699,7 +1892,10 @@ const Admin: React.FC = () => {
                             {pubTitle(rv.publicationId)}
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                            <Stars value={rv.score} size={11} />
+                            {rv.score !== null
+                              ? <Stars value={rv.score} size={11} />
+                              : <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#5C5A52', letterSpacing: '0.06em' }}>N/A</span>
+                            }
                             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#5C5A52' }}>{rv.date}</span>
                             {!rv.isActive && (
                               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.1em', color: '#C25555', border: '1px solid #C25555', padding: '1px 4px', borderRadius: 2 }}>
@@ -1779,20 +1975,41 @@ const Admin: React.FC = () => {
                     <div>
                       <label style={labelStyle}>Puntaje</label>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <Stars value={revForm.score} size={22} />
+                        {revForm.score !== null
+                          ? <Stars value={revForm.score} size={22} />
+                          : <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#5C5A52', letterSpacing: '0.06em' }}>SIN PUNTAJE</span>
+                        }
                         <span style={{ fontFamily: "'Oswald', sans-serif", fontSize: 24, color: '#C9A84C', fontWeight: 600 }}>
-                          {revForm.score}/5
+                          {revForm.score !== null ? `${revForm.score}/5` : 'N/A'}
                         </span>
                         <div style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            onClick={() => setRevForm((prev) => ({ ...prev, score: null }))}
+                            style={{
+                              background: revForm.score === null ? 'rgba(201,168,76,0.15)' : 'rgba(255,255,255,0.04)',
+                              border: `1px solid ${revForm.score === null ? 'rgba(201,168,76,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                              borderRadius: 4,
+                              color: revForm.score === null ? '#C9A84C' : '#5C5A52',
+                              fontFamily: "'Oswald', sans-serif",
+                              fontSize: 11,
+                              width: 40,
+                              height: 32,
+                              cursor: 'pointer',
+                              fontWeight: 600,
+                              letterSpacing: '0.04em',
+                            }}
+                          >
+                            N/A
+                          </button>
                           {[1, 2, 3, 4, 5].map((s) => (
                             <button
                               key={s}
                               onClick={() => setRevForm((prev) => ({ ...prev, score: s }))}
                               style={{
-                                background: revForm.score >= s ? 'rgba(201,168,76,0.15)' : 'rgba(255,255,255,0.04)',
-                                border: `1px solid ${revForm.score >= s ? 'rgba(201,168,76,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                                background: revForm.score !== null && revForm.score >= s ? 'rgba(201,168,76,0.15)' : 'rgba(255,255,255,0.04)',
+                                border: `1px solid ${revForm.score !== null && revForm.score >= s ? 'rgba(201,168,76,0.4)' : 'rgba(255,255,255,0.1)'}`,
                                 borderRadius: 4,
-                                color: revForm.score >= s ? '#C9A84C' : '#5C5A52',
+                                color: revForm.score !== null && revForm.score >= s ? '#C9A84C' : '#5C5A52',
                                 fontFamily: "'Oswald', sans-serif",
                                 fontSize: 13,
                                 width: 32,

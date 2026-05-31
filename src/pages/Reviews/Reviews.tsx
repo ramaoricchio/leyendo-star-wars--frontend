@@ -53,7 +53,7 @@ const Reviews: React.FC = () => {
         const kind = r.publication.is_canon ? 'canon' : 'legends';
         if (kind !== selectedKind) return false;
       }
-      if (r.score < minScore) return false;
+      if ((r.score ?? 0) < minScore) return false;
       return true;
     })
     .sort((a, b) => {
@@ -380,9 +380,9 @@ const Reviews: React.FC = () => {
                       marginBottom: 4,
                     }}
                   >
-                    {review.score}
+                    {review.score ?? 'N/A'}
                   </div>
-                  <Stars value={review.score} size={14} />
+                  {review.score !== null && <Stars value={review.score ?? 0} size={14} />}
                   <div
                     style={{
                       fontFamily: "'JetBrains Mono', monospace",

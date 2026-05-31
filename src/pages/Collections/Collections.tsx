@@ -157,9 +157,7 @@ const CollectionCard: React.FC<{ col: Collection }> = ({ col }) => {
   const kind: 'canon' | 'legends' = col.is_canon ? 'canon' : 'legends';
   const borderColor = kind === 'canon' ? '#4B8FD9' : '#C25555';
 
-  const coverTiles = [0, 1, 2].map((i) => ({
-    tone: safeTone(col.cover_tone, col.id, i),
-  }));
+  const featuredUrls = col.featured_cover_urls ?? [];
 
   return (
     <div
@@ -190,7 +188,7 @@ const CollectionCard: React.FC<{ col: Collection }> = ({ col }) => {
         }}
       >
         {/* Stacked covers */}
-        {coverTiles.map((tile, i) => (
+        {[0, 1, 2].map((i) => (
           <div
             key={i}
             style={{
@@ -202,11 +200,12 @@ const CollectionCard: React.FC<{ col: Collection }> = ({ col }) => {
           >
             <BookCover
               title={col.name}
-              tone={tile.tone}
+              tone={safeTone(col.cover_tone, col.id, i)}
               kind={kind}
               w={90}
               ratio={1.5}
               badge={false}
+              imageUrl={featuredUrls[i] || undefined}
             />
           </div>
         ))}

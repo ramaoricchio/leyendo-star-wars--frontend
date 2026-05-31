@@ -13,7 +13,7 @@ export interface Publication {
   description?: string;
   era: string;
   is_canon: boolean;
-  collection_id?: number;
+  collection_ids?: number[];
   cover_urls?: string[];
   buy_links?: Record<string, string>;
   pages?: number;

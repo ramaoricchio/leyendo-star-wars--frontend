@@ -4,9 +4,12 @@ import TopNav from '../../components/Layout/TopNav';
 import Footer from '../../components/Layout/Footer';
 import BookCover from '../../components/BookCover/BookCover';
 import Flag from '../../components/Flag/Flag';
+import Stars from '../../components/Stars/Stars';
 import useApi from '../../hooks/useApi';
 import { getPublication, getPublications } from '../../api/publications';
+import { getReviewsByPublication } from '../../api/reviews';
 import { Publication, ToneKey } from '../../types/publication';
+import { Review } from '../../types/review';
 
 const extractYouTubeId = (url: string): string | null => {
   try {
@@ -32,17 +35,29 @@ const PublicationDetail: React.FC = () => {
   const pubId = Number(id);
   const [activeAlt, setActiveAlt] = useState(0);
   const [collectionBooks, setCollectionBooks] = useState<Publication[]>([]);
+  const [review, setReview] = useState<Review | null>(null);
 
   const { data: pub, loading, error } = useApi(() => getPublication(pubId), [pubId]);
 
   useEffect(() => {
-    if (!pub?.collection_id) return;
-    getPublications({ collection_id: pub.collection_id, per_page: 10 })
+    const firstColId = pub?.collection_ids?.[0];
+    if (!firstColId) return;
+    getPublications({ collection_id: firstColId, per_page: 10 })
       .then((result) => {
-        setCollectionBooks(result.items.filter((b) => b.id !== pub.id).slice(0, 2));
+        setCollectionBooks(result.items.filter((b) => b.id !== pub!.id).slice(0, 2));
       })
       .catch(() => setCollectionBooks([]));
-  }, [pub?.collection_id, pub?.id]);
+  }, [pub?.collection_ids?.[0], pub?.id]);
+
+  useEffect(() => {
+    if (!pubId) return;
+    getReviewsByPublication(pubId)
+      .then((result) => {
+        const active = result.items.find((r) => r.is_active !== false) ?? null;
+        setReview(active);
+      })
+      .catch(() => setReview(null));
+  }, [pubId]);
 
   if (loading) {
     return (
@@ -122,7 +137,7 @@ const PublicationDetail: React.FC = () => {
             inicio
           </span>
           <span>›</span>
-          {pub.collection_id ? (
+          {pub.collection_ids && pub.collection_ids.length > 0 ? (
             <span
               style={{ cursor: 'pointer' }}
               onClick={() => navigate('/colecciones')}
@@ -305,6 +320,60 @@ const PublicationDetail: React.FC = () => {
                 {pub.description}
               </p>
             )}
+
+            {/* Review section */}
+            {review && review.text && (
+              <div style={{ marginTop: 8 }}>
+                <div
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 12,
+                    color: '#C9A84C',
+                    letterSpacing: '0.1em',
+                    marginBottom: 8,
+                  }}
+                >
+                  // reseña del editor
+                </div>
+                <h2
+                  style={{
+                    fontFamily: "'Oswald', sans-serif",
+                    fontWeight: 600,
+                    fontSize: 22,
+                    textTransform: 'uppercase',
+                    color: '#F2EEDF',
+                    marginBottom: 16,
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  Reseña
+                </h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+                  {review.score !== null && review.score !== undefined
+                    ? (
+                      <>
+                        <Stars value={review.score} size={20} />
+                        <span style={{ fontFamily: "'Oswald', sans-serif", fontSize: 22, color: '#C9A84C', fontWeight: 600 }}>
+                          {review.score}/5
+                        </span>
+                      </>
+                    )
+                    : (
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: '#5C5A52', letterSpacing: '0.08em' }}>
+                        SIN PUNTAJE
+                      </span>
+                    )
+                  }
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#5C5A52', letterSpacing: '0.06em' }}>
+                    {review.date}
+                  </span>
+                </div>
+                <div
+                  className="review-content"
+                  dangerouslySetInnerHTML={{ __html: review.text }}
+                />
+              </div>
+            )}
           </div>
 
           {/* Col 3: Ficha técnica + siguiente en colección */}
@@ -375,7 +444,7 @@ const PublicationDetail: React.FC = () => {
             </div>
 
             {/* Next in collection */}
-            {pub.collection_id && collectionBooks.length > 0 && (
+            {pub.collection_ids && pub.collection_ids.length > 0 && collectionBooks.length > 0 && (
               <div
                 style={{
                   background: '#14141C',
@@ -479,7 +548,7 @@ const PublicationDetail: React.FC = () => {
             >
               Videos
             </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 20 }}>
               {Object.entries(pub.video_urls).map(([title, url]) => {
                 const videoId = extractYouTubeId(url);
                 const thumb = videoId
@@ -505,7 +574,7 @@ const PublicationDetail: React.FC = () => {
                       <div
                         style={{
                           position: 'relative',
-                          height: 160,
+                          height: 200,
                           background: thumb ? `url(${thumb}) center/cover` : '#1C1C26',
                         }}
                       >
@@ -522,8 +591,8 @@ const PublicationDetail: React.FC = () => {
                             top: '50%',
                             left: '50%',
                             transform: 'translate(-50%, -50%)',
-                            width: 44,
-                            height: 44,
+                            width: 52,
+                            height: 52,
                             background: 'rgba(201,168,76,0.9)',
                             borderRadius: '50%',
                             display: 'flex',
