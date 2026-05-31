@@ -6,7 +6,7 @@ import BookCover from '../../components/BookCover/BookCover';
 import Flag from '../../components/Flag/Flag';
 import { ToneKey } from '../../types/publication';
 import { useAuth } from '../../context/AuthContext';
-import { getMyProfile, UserProfile as ProfileData } from '../../api/readingStatus';
+import { getMyProfile, UserProfile as ProfileData, ReadBook } from '../../api/readingStatus';
 import { getPublications } from '../../api/publications';
 
 const deriveTone = (id: number): ToneKey => String.fromCharCode(65 + (id % 8)) as ToneKey;
@@ -122,6 +122,7 @@ const UserProfile: React.FC = () => {
   const badges  = profile?.badges   ?? [];
   const inProgress = profile?.in_progress ?? [];
   const wishlist   = profile?.wishlist    ?? [];
+  const readBooks: ReadBook[] = profile?.read_books ?? [];
 
   const read   = stats.leido;
   const total  = totalCatalog || 1;
@@ -283,6 +284,46 @@ const UserProfile: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Read books */}
+        {readBooks.length > 0 && (
+          <div style={{ marginBottom: 48 }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#C9A84C', letterSpacing: '0.08em', marginBottom: 8 }}>
+              // biblioteca personal
+            </div>
+            <h2 style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 24, textTransform: 'uppercase', color: '#F2EEDF', marginBottom: 20, letterSpacing: '0.04em' }}>
+              Leídos ({readBooks.length})
+            </h2>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {readBooks.map((pub) => (
+                <div
+                  key={pub.id}
+                  onClick={() => navigate(`/publicaciones/${pub.id}`)}
+                  style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6, width: 90 }}
+                  title={pub.title}
+                >
+                  <BookCover
+                    title={pub.title}
+                    author={pub.author}
+                    tone={deriveTone(pub.id)}
+                    kind={pub.is_canon ? 'canon' : 'legends'}
+                    w={90}
+                    ratio={1.5}
+                    badge={false}
+                    imageUrl={pub.cover_urls?.[0]}
+                  />
+                  {pub.personal_score !== null && (
+                    <div style={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <span key={s} style={{ fontSize: 9, color: s <= (pub.personal_score ?? 0) ? '#C9A84C' : 'rgba(201,168,76,0.2)' }}>★</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Badges */}
         <div style={{ marginBottom: 48 }}>

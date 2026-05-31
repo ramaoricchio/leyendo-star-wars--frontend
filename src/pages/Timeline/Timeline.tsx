@@ -436,7 +436,7 @@ const Timeline: React.FC = () => {
                   style={{ cursor: 'pointer' }}
                   title={pub.title}
                 >
-                  <ReadingStatusOverlay publicationId={pub.id}>
+                  <ReadingStatusOverlay publicationId={pub.id} onNavigate={() => navigate(`/publicaciones/${pub.id}`)}>
                     <BookCover
                       title={pub.title}
                       author={pub.author}

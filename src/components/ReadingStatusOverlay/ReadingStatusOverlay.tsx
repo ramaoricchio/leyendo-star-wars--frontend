@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 interface Props {
   publicationId: number;
   children: React.ReactNode;
+  onNavigate?: () => void;
 }
 
 const STATUS_OPTIONS: { value: ReadingStatusValue; label: string; icon: string }[] = [
@@ -20,7 +21,7 @@ const STATUS_COLORS: Record<ReadingStatusValue, string> = {
   leido:    '#C9A84C',
 };
 
-const ReadingStatusOverlay: React.FC<Props> = ({ publicationId, children }) => {
+const ReadingStatusOverlay: React.FC<Props> = ({ publicationId, children, onNavigate }) => {
   const { isAuthenticated } = useAuth();
   const { getStatus, updateStatus } = useReadingStatus();
   const [hovered, setHovered] = useState(false);
@@ -95,6 +96,7 @@ const ReadingStatusOverlay: React.FC<Props> = ({ publicationId, children }) => {
       {/* Hover overlay */}
       {isAuthenticated && hovered && (
         <div
+          onClick={(e) => { e.stopPropagation(); onNavigate?.(); }}
           style={{
             position: 'absolute',
             inset: 0,
@@ -108,8 +110,27 @@ const ReadingStatusOverlay: React.FC<Props> = ({ publicationId, children }) => {
             padding: '10px 8px',
             backdropFilter: 'blur(2px)',
           }}
-          onClick={(e) => e.stopPropagation()}
         >
+          {onNavigate && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onNavigate(); }}
+              style={{
+                width: '100%',
+                padding: '4px 0',
+                border: 'none',
+                borderRadius: 3,
+                background: 'transparent',
+                color: '#C9A84C',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10,
+                cursor: 'pointer',
+                letterSpacing: '0.06em',
+                marginBottom: 2,
+              }}
+            >
+              ver →
+            </button>
+          )}
           {STATUS_OPTIONS.map((opt) => {
             const active = currentStatus === opt.value;
             return (

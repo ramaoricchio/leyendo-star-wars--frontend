@@ -13,6 +13,7 @@ import { Review } from '../../types/review';
 import { useAuth } from '../../context/AuthContext';
 import { useReadingStatus } from '../../context/ReadingStatusContext';
 import { ReadingStatusValue } from '../../types/readingStatus';
+import { getCommunityAvg } from '../../api/readingStatus';
 
 const extractYouTubeId = (url: string): string | null => {
   try {
@@ -46,12 +47,16 @@ const PublicationDetail: React.FC = () => {
   const [collectionBooks, setCollectionBooks] = useState<Publication[]>([]);
   const [review, setReview] = useState<Review | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
+  const [communityAvg, setCommunityAvg] = useState<{ avg: number | null; count: number } | null>(null);
+  const [scoreRefresh, setScoreRefresh] = useState(0);
 
   const { isAuthenticated } = useAuth();
   const { getStatus, updateStatus } = useReadingStatus();
   const myStatus = getStatus(pubId);
   const currentStatus: ReadingStatusValue = myStatus?.status ?? 'no_leido';
   const inWishlist = myStatus?.in_wishlist ?? false;
+  const personalScore = myStatus?.personal_score ?? null;
+  const [hoverScore, setHoverScore] = useState<number | null>(null);
 
   const handleStatus = async (value: ReadingStatusValue) => {
     if (statusLoading) return;
@@ -66,6 +71,20 @@ const PublicationDetail: React.FC = () => {
     await updateStatus(pubId, { in_wishlist: !inWishlist });
     setStatusLoading(false);
   };
+
+  const handleScore = async (score: number) => {
+    if (statusLoading) return;
+    setStatusLoading(true);
+    await updateStatus(pubId, { personal_score: personalScore === score ? null : score });
+    setStatusLoading(false);
+    setScoreRefresh((n) => n + 1);
+  };
+
+  useEffect(() => {
+    getCommunityAvg(pubId)
+      .then(setCommunityAvg)
+      .catch(() => {});
+  }, [pubId, scoreRefresh]);
 
   const { data: pub, loading, error } = useApi(() => getPublication(pubId), [pubId]);
 
@@ -367,6 +386,45 @@ const PublicationDetail: React.FC = () => {
                   <span>{inWishlist ? '♥' : '♡'}</span>
                   {inWishlist ? 'En tu lista de deseos' : 'Agregar a lista de deseos'}
                 </button>
+
+                {currentStatus === 'leido' && (
+                  <div style={{ marginTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 14 }}>
+                    <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: '#5C5A52', marginBottom: 8 }}>
+                      Tu puntuación
+                    </div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {[1, 2, 3, 4, 5].map((star) => {
+                        const active = (hoverScore ?? personalScore ?? 0) >= star;
+                        return (
+                          <button
+                            key={star}
+                            onClick={() => handleScore(star)}
+                            onMouseEnter={() => setHoverScore(star)}
+                            onMouseLeave={() => setHoverScore(null)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: '2px 3px',
+                              cursor: 'pointer',
+                              fontSize: 20,
+                              color: active ? '#C9A84C' : 'rgba(201,168,76,0.2)',
+                              lineHeight: 1,
+                              transition: 'color 0.1s',
+                              opacity: statusLoading ? 0.5 : 1,
+                            }}
+                          >
+                            ★
+                          </button>
+                        );
+                      })}
+                      {personalScore !== null && (
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#5C5A52', marginLeft: 4, alignSelf: 'center' }}>
+                          {personalScore}/5
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -394,11 +452,24 @@ const PublicationDetail: React.FC = () => {
                 fontFamily: "'DM Sans', sans-serif",
                 fontSize: 18,
                 color: '#9C9788',
-                marginBottom: 24,
+                marginBottom: 16,
               }}
             >
               {pub.author} · {pub.year}
             </div>
+
+            {communityAvg && communityAvg.count > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
+                <Stars value={communityAvg.avg ?? 0} size={16} />
+                <span style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 600, fontSize: 18, color: '#C9A84C', lineHeight: 1 }}>
+                  {communityAvg.avg?.toFixed(1)}
+                </span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#5C5A52', letterSpacing: '0.06em' }}>
+                  {communityAvg.count} {communityAvg.count === 1 ? 'puntuación' : 'puntuaciones'}
+                </span>
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 12, marginBottom: 32, flexWrap: 'wrap' }}>
               {[pub.pub_type, pub.era, pub.publisher].filter(Boolean).map((tag) => (
                 <span

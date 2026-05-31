@@ -6,7 +6,7 @@ import { useAuth } from './AuthContext';
 interface ReadingStatusContextType {
   statuses: Record<number, ReadingStatus>;
   getStatus: (pubId: number) => ReadingStatus | null;
-  updateStatus: (pubId: number, data: { status?: ReadingStatusValue; in_wishlist?: boolean }) => Promise<void>;
+  updateStatus: (pubId: number, data: { status?: ReadingStatusValue; in_wishlist?: boolean; personal_score?: number | null }) => Promise<void>;
   isLoaded: boolean;
 }
 
@@ -39,7 +39,7 @@ export const ReadingStatusProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const updateStatus = useCallback(
-    async (pubId: number, data: { status?: ReadingStatusValue; in_wishlist?: boolean }) => {
+    async (pubId: number, data: { status?: ReadingStatusValue; in_wishlist?: boolean; personal_score?: number | null }) => {
       // Optimistic update
       setStatuses((prev) => ({
         ...prev,
@@ -47,6 +47,7 @@ export const ReadingStatusProvider: React.FC<{ children: React.ReactNode }> = ({
           publication_id: pubId,
           status: data.status ?? prev[pubId]?.status ?? 'no_leido',
           in_wishlist: data.in_wishlist ?? prev[pubId]?.in_wishlist ?? false,
+          personal_score: data.personal_score !== undefined ? data.personal_score : prev[pubId]?.personal_score ?? null,
           updated_at: new Date().toISOString(),
         },
       }));

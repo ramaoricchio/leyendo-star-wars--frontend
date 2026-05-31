@@ -4,6 +4,7 @@ export interface ReadingStatus {
   publication_id: number;
   status: ReadingStatusValue;
   in_wishlist: boolean;
+  personal_score: number | null;
   updated_at: string | null;
 }
 

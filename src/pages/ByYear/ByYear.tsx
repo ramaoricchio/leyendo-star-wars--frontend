@@ -4,6 +4,7 @@ import TopNav from '../../components/Layout/TopNav';
 import Footer from '../../components/Layout/Footer';
 import BookCover from '../../components/BookCover/BookCover';
 import Flag from '../../components/Flag/Flag';
+import ReadingStatusOverlay from '../../components/ReadingStatusOverlay/ReadingStatusOverlay';
 import { ToneKey, Publication } from '../../types/publication';
 import useApi from '../../hooks/useApi';
 import { getPublications } from '../../api/publications';
@@ -252,15 +253,20 @@ const ByYear: React.FC = () => {
                         width: 110,
                       }}
                     >
-                      <BookCover
-                        title={pub.title}
-                        author={pub.author}
-                        tone={deriveTone(pub.id)}
-                        kind={kind}
-                        w={110}
-                        ratio={1.5}
-                        imageUrl={pub.cover_urls?.[0] || undefined}
-                      />
+                      <ReadingStatusOverlay
+                        publicationId={pub.id}
+                        onNavigate={() => navigate(`/publicaciones/${pub.id}`)}
+                      >
+                        <BookCover
+                          title={pub.title}
+                          author={pub.author}
+                          tone={deriveTone(pub.id)}
+                          kind={kind}
+                          w={110}
+                          ratio={1.5}
+                          imageUrl={pub.cover_urls?.[0] || undefined}
+                        />
+                      </ReadingStatusOverlay>
                       <Flag kind={kind} size="sm" />
                       <div
                         style={{
