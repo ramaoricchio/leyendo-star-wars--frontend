@@ -37,32 +37,39 @@ const TopNav: React.FC<TopNavProps> = ({ active }) => {
       {/* Logo */}
       <div
         onClick={() => navigate('/')}
-        style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', lineHeight: 1 }}
+        style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
       >
-        <span
-          style={{
-            fontFamily: "'Oswald', sans-serif",
-            fontWeight: 500,
-            fontSize: 13,
-            color: '#F2EEDF',
-            letterSpacing: '0.3em',
-            textTransform: 'uppercase',
-          }}
-        >
-          Leyendo
-        </span>
-        <span
-          style={{
-            fontFamily: "'Oswald', sans-serif",
-            fontWeight: 600,
-            fontSize: 16,
-            color: '#C9A84C',
-            letterSpacing: '0.5em',
-            textTransform: 'uppercase',
-          }}
-        >
-          Star Wars
-        </span>
+        <img
+          src="/logo.png"
+          alt="Leyendo Star Wars"
+          style={{ height: 48, width: 'auto', display: 'block' }}
+        />
+        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
+          <span
+            style={{
+              fontFamily: "'Oswald', sans-serif",
+              fontWeight: 500,
+              fontSize: 13,
+              color: '#F2EEDF',
+              letterSpacing: '0.3em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Leyendo
+          </span>
+          <span
+            style={{
+              fontFamily: "'Oswald', sans-serif",
+              fontWeight: 600,
+              fontSize: 16,
+              color: '#C9A84C',
+              letterSpacing: '0.5em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Star Wars
+          </span>
+        </div>
       </div>
 
       {/* Nav Items */}
