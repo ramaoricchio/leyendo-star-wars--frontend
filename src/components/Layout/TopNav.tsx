@@ -137,11 +137,44 @@ const TopNav: React.FC<TopNavProps> = ({ active }) => {
                 color: '#F2EEDF',
                 fontFamily: "'DM Sans', sans-serif",
                 fontSize: 14,
-                padding: '6px 14px',
+                padding: '6px 16px 6px 10px',
                 cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
               }}
             >
-              {user?.username}
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: '50%',
+                  background: 'rgba(201,168,76,0.12)',
+                  border: '1px solid rgba(201,168,76,0.45)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#C9A84C',
+                  fontFamily: "'Oswald', sans-serif",
+                  fontWeight: 600,
+                  fontSize: 13,
+                  flexShrink: 0,
+                }}
+              >
+                {user?.username?.[0]?.toUpperCase()}
+              </div>
+              <span>{user?.username}</span>
+              <span
+                style={{
+                  fontSize: 10,
+                  opacity: 0.6,
+                  transform: showMenu ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s',
+                  display: 'inline-block',
+                }}
+              >
+                ▾
+              </span>
             </button>
             {showMenu && (
               <div
